@@ -3,7 +3,6 @@ const sqlite3 = require('sqlite3').verbose();
 const log = require('./logger');
 const path = require('path');
 
-// Base de données SQLite pour les genres
 const dbDir = path.join(__dirname, '../db');
 
 if (!fs.existsSync(dbDir)) {
@@ -27,7 +26,6 @@ const cacheDb = new sqlite3.Database(path.join(dbDir, 'cache.db'), (err) => {
     }
 });
 
-// Création de la table des genres avec une clé primaire composite
 genresDb.serialize(() => {
     genresDb.run(`CREATE TABLE IF NOT EXISTS genres (
         genre_id INTEGER,
@@ -43,7 +41,6 @@ genresDb.serialize(() => {
     });
 });
 
-// Création de la table de cache si elle n'existe pas
 cacheDb.serialize(() => {
     cacheDb.run(`CREATE TABLE IF NOT EXISTS cache (
         key TEXT PRIMARY KEY,

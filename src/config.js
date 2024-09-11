@@ -7,7 +7,6 @@ const getCurrentYear = () => new Date().getFullYear();
 const generateYearIntervals = (startYear = 1880, endYear = getCurrentYear(), interval = 4) => {
     const intervals = [];
 
-    // Corriger l'année de fin pour éviter les problèmes avec un intervalle unique
     endYear = Math.max(endYear, startYear);
 
     for (let year = endYear; year >= startYear; year -= interval) {
@@ -15,7 +14,6 @@ const generateYearIntervals = (startYear = 1880, endYear = getCurrentYear(), int
         intervals.push(`${nextYear}-${year}`);
     }
 
-    // Ajuster le premier intervalle pour inclure jusqu'à startYear
     if (intervals.length > 0) {
         const firstInterval = intervals[intervals.length - 1];
         const [firstStart, firstEnd] = firstInterval.split('-').map(Number);
@@ -24,7 +22,6 @@ const generateYearIntervals = (startYear = 1880, endYear = getCurrentYear(), int
             intervals[intervals.length - 1] = `${startYear}-${firstEnd}`;
         }
     } else {
-        // Si aucun intervalle n'a été ajouté, ajouter un intervalle unique pour toute la période
         intervals.push(`${startYear}-${endYear}`);
     }
 
@@ -45,17 +42,13 @@ function getGenres(type) {
     });
 }
 
-// Fonction pour générer le manifeste
 async function generateManifest() {
     try {
-        // Utilisation des bons types pour récupérer les genres
         const movieGenres = await getGenres('movie');
         const seriesGenres = await getGenres('tv');
 
-        // Génération dynamique des intervalles d'années
         const yearIntervals = generateYearIntervals();
 
-        // Assurez-vous que les genres sont définis comme des tableaux
         const manifest = {
             id: 'community.stremiotmdbdice',
             version: '1.0.0',
@@ -73,7 +66,7 @@ async function generateManifest() {
                     extra: [
                         { name: "genre", options: movieGenres.length ? movieGenres : ["No genres available"], isRequired: false },
                         { name: "rating", options: ["8-10", "6-8", "4-6", "2-4", "0-2"], isRequired: true },
-                        { name: "year", options: yearIntervals, isRequired: true }, // Utilisation des intervalles d'années dynamiques
+                        { name: "year", options: yearIntervals, isRequired: true },
                         { name: 'skip', isRequired: false },
                     ]
                 },
@@ -84,7 +77,7 @@ async function generateManifest() {
                     extra: [
                         { name: "genre", options: seriesGenres.length ? seriesGenres : ["No genres available"], isRequired: false },
                         { name: "rating", options: ["8-10", "6-8", "4-6", "2-4", "0-2"], isRequired: true },
-                        { name: "year", options: yearIntervals, isRequired: true }, // Utilisation des intervalles d'années dynamiques
+                        { name: "year", options: yearIntervals, isRequired: true },
                         { name: 'skip', isRequired: false },
                     ]
                 }
@@ -114,5 +107,4 @@ async function generateManifest() {
     }
 }
 
-// Exportation du manifeste
 module.exports = generateManifest;
