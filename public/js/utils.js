@@ -20,17 +20,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getConfig() {
         const tmdbApiKey = document.getElementById('tmdb-api-key').value;
-        const rpdbApiKey = document.getElementById('rpdb-api-key').value;
         const language = document.getElementById('language').value;
 
-        if (!tmdbApiKey || !rpdbApiKey || !language) {
-            showModal('Warning', 'Please fill in all required fields: TMDB API Key, RPDB API Key, and Language.', 'btn-error');
+        if (!tmdbApiKey || !language) {
+            showModal('Warning', 'Please fill in all required fields: TMDB API Key and Language.', 'btn-error');
             return null;
         }
 
         const config = {
             tmdbApiKey: tmdbApiKey,
-            rpdbApiKey: rpdbApiKey,
             language: language,
             hideNoPoster: document.getElementById('hide-no-poster').checked,
             filterAdult: document.getElementById('filter-adult').checked

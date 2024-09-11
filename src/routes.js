@@ -58,7 +58,7 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
 
     // Extraction du paramètre de configuration
     const config = configParameters ? JSON.parse(decodeURIComponent(configParameters)) : {};
-    const { language } = config;
+    const { language, hideNoPoster } = config; // Extraction de hideNoPoster depuis la configuration
 
     log.info(`Received catalog request with type: ${type}, id: ${id}, language: ${language}`);
     log.info(`Received extra parameters: ${JSON.stringify(extraParams)}`);
@@ -82,8 +82,13 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
             extraParams = { ...extraParams, ...extraParamsFromUrl };
         }
 
+        // Intégrer les paramètres de configuration dans extraParams
         if (language) {
             extraParams.language = language;
+        }
+
+        if (typeof hideNoPoster !== 'undefined') {
+            extraParams.hideNoPoster = hideNoPoster.toString(); // Convertir en chaîne pour comparaison
         }
 
         if (extraParams.genre) {
@@ -98,8 +103,12 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
         const metas = await fetchData(type, id, extraParams, cacheDuration);
 
         log.info(`Fetched ${metas.length} items from TMDB for type: ${type}, id: ${id}`);
-        
-        res.json({ metas });
+
+        // Filtrage des contenus sans poster si hideNoPoster est défini sur 'true'
+        const shouldHideNoPoster = extraParams.hideNoPoster === 'true'; // Comparaison correcte
+        const filteredMetas = shouldHideNoPoster ? metas.filter(meta => meta.poster !== null) : metas;
+
+        res.json({ metas: filteredMetas });
     } catch (error) {
         log.error(`Error fetching catalog data: ${error.message}`);
         res.status(500).json({ metas: [] });
