@@ -2,6 +2,7 @@ const axios = require('axios');
 const log = require('./logger');
 const { genresDb, cacheDb } = require('./db');
 const { getCache, setCache } = require('./cache'); // Importer les fonctions de gestion du cache
+const queue = require('./queue');  // Importer la file d'attente
 
 // Clé API TMDB - Assurez-vous de l'avoir configurée dans les variables d'environnement
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
@@ -108,7 +109,6 @@ const buildQueryParams = (params) => {
     return queryParams.join('&');
 };
 
-// Exemple d'utilisation de determinePageFromSkip dans tmdb.js
 const fetchData = async (type, id, extra) => {
     try {
         // Génération de la clé de cache
@@ -129,39 +129,46 @@ const fetchData = async (type, id, extra) => {
         const queryParams = buildQueryParams({ ...extra, page });
 
         // URL de la requête TMDB
-        const url = `https://api.themoviedb.org/3/discover/${type}?api_key=${process.env.TMDB_API_KEY}&${queryParams}`;
+        const url = `${TMDB_BASE_URL}/discover/${type}?api_key=${TMDB_API_KEY}&${queryParams}`;
         log.info(`Fetching data from TMDB: ${url}`);
 
-        // Effectue la requête à TMDB
-        const response = await axios.get(url);
-        const results = response.data.results;
+        // Utilisation de la file d'attente pour la requête TMDB
+        return new Promise((resolve, reject) => {
+            queue.push({
+                fn: () => axios.get(url).then(response => {
+                    const results = response.data.results;
 
-        // Logs pour les résultats obtenus
-        log.info(`Received ${results.length} results from TMDB for type: ${type}`);
+                    // Logs pour les résultats obtenus
+                    log.info(`Received ${results.length} results from TMDB for type: ${type}`);
 
-        // Traite les résultats pour renvoyer un tableau d'objets Meta
-        const metas = results.map(item => ({
-            id: item.id.toString(),
-            name: item.title || item.name,
-            poster: item.poster_path ? `https://image.tmdb.org/t/p/w600_and_h900_bestv2${item.poster_path}` : null,
-            banner: item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : null,
-            type: type,
-            description: item.overview,
-            releaseInfo: item.release_date || item.first_air_date,
-            imdbRating: item.vote_average ? item.vote_average.toFixed(1) : null,
-            genre: item.genre_ids
-        }));
+                    // Traite les résultats pour renvoyer un tableau d'objets Meta
+                    const metas = results.map(item => ({
+                        id: item.id.toString(),
+                        name: item.title || item.name,
+                        poster: item.poster_path ? `https://image.tmdb.org/t/p/w600_and_h900_bestv2${item.poster_path}` : null,
+                        banner: item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : null,
+                        type: type,
+                        description: item.overview,
+                        releaseInfo: item.release_date || item.first_air_date,
+                        imdbRating: item.vote_average ? item.vote_average.toFixed(1) : null,
+                        genre: item.genre_ids
+                    }));
 
-        // Mettre en cache les résultats
-        setCache(cacheKey, metas, '3d', page, skip);
+                    // Mettre en cache les résultats
+                    setCache(cacheKey, metas, '3d', page, skip);
 
-        return metas;
+                    resolve(metas);
+                }).catch(error => {
+                    log.error(`Error fetching data from TMDB: ${error.message}`);
+                    reject(new Error('Failed to fetch data from TMDB'));
+                })
+            });
+        });
     } catch (error) {
-        log.error(`Error fetching data from TMDB: ${error.message}`);
-        throw new Error('Failed to fetch data from TMDB');
+        log.error(`Error in fetchData function: ${error.message}`);
+        throw error;
     }
 };
-
 
 // Fonction pour récupérer les genres depuis l'API TMDB
 const fetchGenres = async (type) => {
