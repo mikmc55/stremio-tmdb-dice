@@ -1,7 +1,7 @@
 const axios = require('axios');
 const log = require('./logger');
-const sqlite3 = require('sqlite3').verbose();
 const { genresDb } = require('./db');
+const { getCache, setCache } = require('./cache'); // Importer les fonctions de gestion du cache
 
 // Clé API TMDB - Assurez-vous de l'avoir configurée dans les variables d'environnement
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
@@ -55,6 +55,16 @@ const buildQueryParams = (params) => {
 
 const fetchData = async (type, id, extra) => {
     try {
+        // Génération de la clé de cache
+        const cacheKey = `catalog_${type}_${id}_${JSON.stringify(extra)}`;
+
+        // Vérification du cache
+        const cachedData = await getCache(cacheKey);
+        if (cachedData) {
+            log.info(`Returning cached data for key: ${cacheKey}`);
+            return cachedData;
+        }
+
         // Construction des paramètres de la requête
         const queryParams = buildQueryParams(extra);
         
@@ -85,6 +95,9 @@ const fetchData = async (type, id, extra) => {
             imdbRating: item.vote_average ? item.vote_average.toFixed(1) : null,
             genre: item.genre_ids
         }));
+
+        // Mettre en cache les résultats
+        setCache(cacheKey, metas);
 
         return metas;
     } catch (error) {

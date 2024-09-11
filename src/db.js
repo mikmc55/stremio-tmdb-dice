@@ -23,6 +23,14 @@ const genresDb = new sqlite3.Database(path.join(dbDir, 'genres.db'), (err) => {
     }
 });
 
+const cacheDb = new sqlite3.Database(path.join(dbDir, 'cache.db'), (err) => {
+    if (err) {
+        log.error('Failed to connect to cache.db:', err);
+    } else {
+        log.debug('Connected to cache.db successfully');
+    }
+});
+
 // Création de la table des genres avec une clé primaire composite
 genresDb.serialize(() => {
     genresDb.run(`CREATE TABLE IF NOT EXISTS genres (
@@ -39,6 +47,22 @@ genresDb.serialize(() => {
     });
 });
 
+// Création de la table de cache si elle n'existe pas
+cacheDb.serialize(() => {
+    cacheDb.run(`CREATE TABLE IF NOT EXISTS cache (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        timestamp INTEGER
+    )`, (err) => {
+        if (err) {
+            log.error('Error creating cache table:', err);
+        } else {
+            log.debug('Cache table created or already exists');
+        }
+    });
+});
+
 module.exports = {
-    genresDb
+    genresDb,
+    cacheDb
 };
