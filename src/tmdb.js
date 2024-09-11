@@ -112,9 +112,12 @@ const buildQueryParams = (params) => {
 
 const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMDB_API_KEY) => {
     try {
+        // Remplacement de 'series' par 'tv' pour les séries
+        const mediaType = type === 'series' ? 'tv' : type; 
+
         // Mise à jour de la clé de cache pour inclure la langue
         const language = extra.language || 'default';
-        const cacheKey = `catalog_${type}_${id}_${JSON.stringify(extra)}_lang_${language}`;
+        const cacheKey = `catalog_${mediaType}_${id}_${JSON.stringify(extra)}_lang_${language}`;
 
         const cachedData = await getCache(cacheKey, cacheDuration);
         if (cachedData) {
@@ -127,7 +130,8 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
 
         const queryParams = buildQueryParams({ ...extra, page });
 
-        const url = `${TMDB_BASE_URL}/discover/${type}?api_key=${tmdbApiKey}&${queryParams}`;
+        // Utiliser le bon type ('tv' pour les séries et non 'series')
+        const url = `${TMDB_BASE_URL}/discover/${mediaType}?api_key=${tmdbApiKey}&${queryParams}`;
         log.info(`Fetching data from TMDB: ${url}`);
 
         return new Promise((resolve, reject) => {
@@ -135,14 +139,14 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
                 fn: () => axios.get(url).then(response => {
                     const results = response.data.results;
 
-                    log.info(`Received ${results.length} results from TMDB for type: ${type}`);
+                    log.info(`Received ${results.length} results from TMDB for type: ${mediaType}`);
 
                     const metas = results.map(item => ({
                         id: item.id.toString(),
                         name: item.title || item.name,
                         poster: item.poster_path ? `https://image.tmdb.org/t/p/w600_and_h900_bestv2${item.poster_path}` : null,
                         banner: item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : null,
-                        type: type,
+                        type: mediaType, // Utilisation de mediaType au lieu de type
                         description: item.overview,
                         releaseInfo: item.release_date || item.first_air_date,
                         imdbRating: item.vote_average ? item.vote_average.toFixed(1) : null,
