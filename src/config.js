@@ -1,5 +1,3 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
 const { genresDb } = require('./db');
 
 const getCurrentYear = () => new Date().getFullYear();
