@@ -78,6 +78,7 @@ const determinePageFromSkip = async (skip, catalogDb) => {
 const buildQueryParams = (params) => {
     const queryParams = [];
 
+    // Filtrer les années si elles existent
     if (params.year) {
         const [startYear, endYear] = params.year.split('-');
         if (startYear && endYear) {
@@ -86,6 +87,7 @@ const buildQueryParams = (params) => {
         }
     }
 
+    // Filtrer les évaluations si elles existent
     if (params.rating) {
         const [minRating, maxRating] = params.rating.split('-');
         if (minRating && maxRating) {
@@ -94,8 +96,13 @@ const buildQueryParams = (params) => {
         }
     }
 
+    // Ajouter les autres paramètres sauf ceux qui ne doivent pas être inclus
     for (const [key, value] of Object.entries(params)) {
-        if (value !== undefined && value !== null && key !== 'year' && key !== 'rating') {
+        if (
+            value !== undefined && 
+            value !== null && 
+            !['year', 'rating', 'hideNoPoster', 'skip', 'genre'].includes(key)
+        ) {
             queryParams.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
         }
     }
