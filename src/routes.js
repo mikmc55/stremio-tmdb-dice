@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const log = require('./logger');
 const { requestLogger, errorHandler } = require('./middleware');
-const { fetchData, getGenreId } = require('./tmdb');
+const { fetchData, getGenreId, checkGenresExistForLanguage, fetchAndStoreGenres } = require('./tmdb');
 const generateManifest = require('./config');
 
 const router = express.Router();
@@ -21,9 +21,32 @@ router.get("/:configParameters?/configure", (req, res) => {
 
 router.get("/:configParameters?/manifest.json", async (req, res) => {
     try {
-        const manifest = await generateManifest();
+        const { configParameters } = req.params;
+        const config = configParameters ? JSON.parse(decodeURIComponent(configParameters)) : {};
+        const { language } = config;
+
+        log.debug(`Received request for manifest with language: ${language}`);
+
+        if (language) {
+            const genresExist = await checkGenresExistForLanguage(language);
+            log.debug(`Genres exist for language ${language}: ${genresExist}`);
+
+            if (!genresExist) {
+                log.debug(`Fetching genres for language: ${language}`);
+                await fetchAndStoreGenres(language); // Attendez la fin du fetch et du stockage
+                log.debug(`Genres fetched and stored for language: ${language}`);
+            } else {
+                log.debug(`Genres already fetched for language: ${language}`);
+            }
+        } else {
+            log.debug(`No language specified in request, skipping genre check.`);
+        }
+
+        // Génération du manifest après que le fetch des genres soit terminé
+        const manifest = await generateManifest(language);
         res.json(manifest);
     } catch (error) {
+        log.error('Error generating manifest:', error.message);
         res.status(500).json({ error: 'Error generating manifest' });
     }
 });

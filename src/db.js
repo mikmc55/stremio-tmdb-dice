@@ -31,7 +31,9 @@ genresDb.serialize(() => {
         genre_id INTEGER,
         genre_name TEXT,
         media_type TEXT,
-        PRIMARY KEY (genre_id, media_type)
+        language TEXT,
+        PRIMARY KEY (genre_id, media_type, language),
+        UNIQUE (genre_id, media_type, language)
     )`, (err) => {
         if (err) {
             log.error('Error creating genres table:', err);

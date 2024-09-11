@@ -26,10 +26,10 @@ const generateYearIntervals = (startYear = 1880, endYear = getCurrentYear(), int
     return intervals;
 };
 
-function getGenres(type) {
+function getGenres(type, language) {
     return new Promise((resolve, reject) => {
-        const query = `SELECT genre_name FROM genres WHERE media_type = ?`;
-        genresDb.all(query, [type], (err, rows) => {
+        const query = `SELECT genre_name FROM genres WHERE media_type = ? AND language = ?`;
+        genresDb.all(query, [type, language], (err, rows) => {
             if (err) {
                 reject(err);
             } else {
@@ -40,10 +40,10 @@ function getGenres(type) {
     });
 }
 
-async function generateManifest() {
+async function generateManifest(language) {
     try {
-        const movieGenres = await getGenres('movie');
-        const seriesGenres = await getGenres('tv');
+        const movieGenres = await getGenres('movie', language);
+        const seriesGenres = await getGenres('tv', language);
 
         const yearIntervals = generateYearIntervals();
 

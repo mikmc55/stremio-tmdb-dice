@@ -155,17 +155,18 @@ const fetchData = async (type, id, extra) => {
     }
 };
 
-const fetchGenres = async (type) => {
+const fetchGenres = async (type, language) => {
     const mediaType = type === 'series' ? 'tv' : 'movie';
     const endpoint = `/genre/${mediaType}/list`;
 
     try {
         const response = await axios.get(`${TMDB_BASE_URL}${endpoint}`, {
             params: {
-                api_key: TMDB_API_KEY
+                api_key: TMDB_API_KEY,
+                language: language // Inclure la langue dans les paramètres
             }
         });
-        log.debug(`Genres retrieved for type ${type}`);
+        log.debug(`Genres retrieved for type ${type} and language ${language}`);
         return response.data.genres;
     } catch (error) {
         log.error(`Error fetching genres from TMDB: ${error.message}`);
@@ -173,48 +174,75 @@ const fetchGenres = async (type) => {
     }
 };
 
-const updateGenres = async () => {
+const storeGenresInDb = (genres, mediaType, language) => {
+    return new Promise((resolve, reject) => {
+        genresDb.serialize(() => {
+            genresDb.run('BEGIN TRANSACTION');
+
+            const insertGenre = genresDb.prepare(`
+                INSERT INTO genres (genre_id, genre_name, media_type, language)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT DO NOTHING; -- Utilisation de la clause générique ON CONFLICT
+            `);
+
+            let genresProcessed = 0;
+
+            genres.forEach((genre) => {
+                insertGenre.run(genre.id, genre.name, mediaType, language, (err) => {
+                    if (err) {
+                        log.error(`Error inserting genre: ${err.message}`);
+                        genresDb.run('ROLLBACK');
+                        reject(err);
+                        return;
+                    }
+
+                    genresProcessed++;
+                    if (genresProcessed === genres.length) {
+                        insertGenre.finalize();
+                        genresDb.run('COMMIT');
+                        log.info(`Genres stored for ${mediaType} in language ${language}`);
+                        resolve();
+                    }
+                });
+            });
+        });
+    });
+};
+
+// Fonction pour vérifier si les genres existent déjà pour une langue donnée
+const checkGenresExistForLanguage = async (language) => {
+    return new Promise((resolve, reject) => {
+        log.debug(`Checking if genres exist for language: ${language}`);
+        genresDb.get(
+            `SELECT 1 FROM genres WHERE language = ? LIMIT 1`,
+            [language], 
+            (err, row) => {
+                if (err) {
+                    log.error(`Error checking genres existence for language ${language}: ${err.message}`);
+                    reject(err);
+                } else {
+                    log.debug(`Genres existence check result for language ${language}: ${!!row}`);
+                    resolve(!!row); // Retourne true si les genres existent
+                }
+            }
+        );
+    });
+};
+
+// Fonction pour récupérer et stocker les genres pour une langue donnée
+const fetchAndStoreGenres = async (language) => {
     try {
-        const movieGenres = await fetchGenres('movie');
-        const tvGenres = await fetchGenres('series');
+        const movieGenres = await fetchGenres('movie', language);
+        const tvGenres = await fetchGenres('series', language);
 
-        const insertOrReplaceGenre = genresDb.prepare(`
-            INSERT OR REPLACE INTO genres (genre_id, genre_name, media_type)
-            VALUES (?, ?, ?);
-        `);
+        await storeGenresInDb(movieGenres, 'movie', language);
+        await storeGenresInDb(tvGenres, 'tv', language);
 
-        movieGenres.forEach(genre => {
-            insertOrReplaceGenre.run(genre.id, genre.name, 'movie');
-        });
-
-        tvGenres.forEach(genre => {
-            insertOrReplaceGenre.run(genre.id, genre.name, 'tv');
-        });
-
-        insertOrReplaceGenre.finalize();
-        log.info('Genres update completed.');
+        log.info(`Genres fetched and stored for language ${language}.`);
     } catch (error) {
-        log.error(`Error during genres update: ${error.message}`);
+        log.error(`Error during fetching and storing genres: ${error.message}`);
     }
 };
 
-const scheduleGenreUpdates = () => {
-    log.info('Scheduling genre updates every 72 hours.');
-    setInterval(async () => {
-        log.info('Starting genre update...');
-        await updateGenres();
-    }, 3 * 24 * 60 * 60 * 1000);
-};
-
-(async () => {
-    try {
-        log.info('Initializing genre updates.');
-        await updateGenres();
-        scheduleGenreUpdates();
-    } catch (error) {
-        log.error(`Initialization error: ${error.message}`);
-    }
-})();
-
-module.exports = { fetchData, getGenreId };
+module.exports = { fetchData, getGenreId, checkGenresExistForLanguage, fetchAndStoreGenres };
 
