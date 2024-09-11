@@ -48,7 +48,9 @@ cacheDb.serialize(() => {
     cacheDb.run(`CREATE TABLE IF NOT EXISTS cache (
         key TEXT PRIMARY KEY,
         value TEXT,
-        timestamp INTEGER
+        timestamp INTEGER,
+        page INTEGER,
+        skip INTEGER
     )`, (err) => {
         if (err) {
             log.error('Error creating cache table:', err);

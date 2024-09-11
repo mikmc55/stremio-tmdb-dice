@@ -21,14 +21,14 @@ const cacheDurationToSeconds = (duration) => {
 };
 
 // Fonction pour définir le cache
-const setCache = (key, value, duration = '3d') => {
+const setCache = (key, value, duration = '3d', page = 1, skip = 0) => {
     try {
         const durationInSeconds = cacheDurationToSeconds(duration);
         const timestamp = Math.floor(Date.now() / 1000);
         const expireTime = timestamp + durationInSeconds; // durée en secondes
 
-        const query = `INSERT OR REPLACE INTO cache (key, value, timestamp) VALUES (?, ?, ?)`;
-        cacheDb.run(query, [key, JSON.stringify(value), expireTime], (err) => {
+        const query = `INSERT OR REPLACE INTO cache (key, value, timestamp, page, skip) VALUES (?, ?, ?, ?, ?)`;
+        cacheDb.run(query, [key, JSON.stringify(value), expireTime, page, skip], (err) => {
             if (err) {
                 log.error(`Failed to set cache for key ${key}: ${err.message}`);
             } else {
@@ -45,7 +45,7 @@ const getCache = (key, cacheDuration = '3d') => {
     const cacheDurationInSeconds = cacheDurationToSeconds(cacheDuration);
 
     return new Promise((resolve, reject) => {
-        cacheDb.get(`SELECT value, timestamp FROM cache WHERE key = ?`,
+        cacheDb.get(`SELECT value, timestamp, page, skip FROM cache WHERE key = ?`,
             [key],
             (err, row) => {
                 if (err) {
@@ -56,7 +56,11 @@ const getCache = (key, cacheDuration = '3d') => {
                         const isCacheValid = (Date.now() / 1000 - row.timestamp) < cacheDurationInSeconds;
                         if (isCacheValid) {
                             log.debug('Cache hit');
-                            resolve(JSON.parse(row.value));
+                            resolve({
+                                value: JSON.parse(row.value),
+                                page: row.page,
+                                skip: row.skip
+                            });
                         } else {
                             log.debug('Cache expired');
                             resolve(null);

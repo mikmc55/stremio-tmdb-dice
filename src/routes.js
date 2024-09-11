@@ -79,15 +79,8 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
         // Logs pour les données récupérées
         log.info(`Fetched ${metas.length} items from TMDB for type: ${type}, id: ${id}`);
         
-        // Construction de la réponse avec gestion du cache
-        const response = {
-            metas,
-            cacheMaxAge: 3600, // Cache-Control: max-age=1h
-            staleRevalidate: 86400, // Stale-while-revalidate: 1 jour
-            staleError: 43200 // Stale-if-error: 12 heures
-        };
-
-        res.json(response);
+        // Construction de la réponse sans gestion du cache HTTP
+        res.json({ metas });
     } catch (error) {
         log.error(`Error fetching catalog data: ${error.message}`);
         res.status(500).json({ metas: [] });

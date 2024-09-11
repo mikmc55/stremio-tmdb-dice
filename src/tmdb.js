@@ -1,6 +1,6 @@
 const axios = require('axios');
 const log = require('./logger');
-const { genresDb } = require('./db');
+const { genresDb, cacheDb } = require('./db');
 const { getCache, setCache } = require('./cache'); // Importer les fonctions de gestion du cache
 
 // Clé API TMDB - Assurez-vous de l'avoir configurée dans les variables d'environnement
@@ -20,6 +20,60 @@ const getGenreId = (type, genreName) => {
             }
         });
     });
+};
+
+const determinePageFromSkip = async (skip, catalogDb) => {
+    try {
+        const cachedEntry = await new Promise((resolve, reject) => {
+            catalogDb.get(
+                "SELECT page, skip FROM cache WHERE skip = ? ORDER BY skip DESC LIMIT 1",
+                [skip],
+                (err, row) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve(row);
+                    }
+                }
+            );
+        });
+
+        if (cachedEntry) {
+            log.debug('Cached Entry:', cachedEntry);
+            log.debug('Determined Page from Cache:', cachedEntry.page);
+            return cachedEntry.page;
+        }
+
+        const lastEntry = await new Promise((resolve, reject) => {
+            catalogDb.get(
+                "SELECT page, skip FROM cache ORDER BY skip DESC LIMIT 1",
+                (err, row) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve(row);
+                    }
+                }
+            );
+        });
+
+        log.debug('Last Entry:', lastEntry);
+
+        if (lastEntry) {
+            log.debug('Current Skip:', skip, 'Last Skip:', lastEntry.skip);
+
+            if (skip > lastEntry.skip) {
+                log.debug('Determined Page:', lastEntry.page + 1);
+                return lastEntry.page + 1;
+            }
+        }
+
+        log.debug('Default Page:', 1);
+        return 1;
+    } catch (error) {
+        log.error('Error in determinePageFromSkip:', error);
+        return 1;
+    }
 };
 
 // Fonction pour construire les paramètres de la requête
@@ -54,26 +108,26 @@ const buildQueryParams = (params) => {
     return queryParams.join('&');
 };
 
-// Fonction pour récupérer les données
-const fetchData = async (type, id, extra, cacheDuration) => {
+// Exemple d'utilisation de determinePageFromSkip dans tmdb.js
+const fetchData = async (type, id, extra) => {
     try {
         // Génération de la clé de cache
         const cacheKey = `catalog_${type}_${id}_${JSON.stringify(extra)}`;
 
         // Vérification du cache
-        const cachedData = await getCache(cacheKey, cacheDuration);
+        const cachedData = await getCache(cacheKey, '3d'); // Exemple avec une durée de cache de 3 jours
         if (cachedData) {
             log.info(`Returning cached data for key: ${cacheKey}`);
-            return cachedData;
+            return cachedData.value;
         }
 
+        // Détermination de la page en fonction du skip
+        const skip = extra.skip || 0;
+        const page = await determinePageFromSkip(skip, cacheDb);
+
         // Construction des paramètres de la requête
-        const queryParams = buildQueryParams(extra);
-        
-        // Logs pour les paramètres transmis
-        log.info(`Transmitting parameters to TMDB: type=${type}, id=${id}, extra=${JSON.stringify(extra)}`);
-        log.info(`TMDB query parameters: ${queryParams}`);
-        
+        const queryParams = buildQueryParams({ ...extra, page });
+
         // URL de la requête TMDB
         const url = `https://api.themoviedb.org/3/discover/${type}?api_key=${process.env.TMDB_API_KEY}&${queryParams}`;
         log.info(`Fetching data from TMDB: ${url}`);
@@ -99,7 +153,7 @@ const fetchData = async (type, id, extra, cacheDuration) => {
         }));
 
         // Mettre en cache les résultats
-        setCache(cacheKey, metas, cacheDuration);
+        setCache(cacheKey, metas, '3d', page, skip);
 
         return metas;
     } catch (error) {
@@ -107,6 +161,7 @@ const fetchData = async (type, id, extra, cacheDuration) => {
         throw new Error('Failed to fetch data from TMDB');
     }
 };
+
 
 // Fonction pour récupérer les genres depuis l'API TMDB
 const fetchGenres = async (type) => {
