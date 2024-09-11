@@ -103,11 +103,13 @@ const buildQueryParams = (params) => {
     return queryParams.join('&');
 };
 
-const fetchData = async (type, id, extra) => {
+const fetchData = async (type, id, extra, cacheDuration = '3d') => {
     try {
-        const cacheKey = `catalog_${type}_${id}_${JSON.stringify(extra)}`;
+        // Mise à jour de la clé de cache pour inclure la langue
+        const language = extra.language || 'default';
+        const cacheKey = `catalog_${type}_${id}_${JSON.stringify(extra)}_lang_${language}`;
 
-        const cachedData = await getCache(cacheKey, '3d');
+        const cachedData = await getCache(cacheKey, cacheDuration);
         if (cachedData) {
             log.info(`Returning cached data for key: ${cacheKey}`);
             return cachedData.value;
@@ -140,7 +142,7 @@ const fetchData = async (type, id, extra) => {
                         genre: item.genre_ids
                     }));
 
-                    setCache(cacheKey, metas, '3d', page, skip);
+                    setCache(cacheKey, metas, cacheDuration, page, skip);
 
                     resolve(metas);
                 }).catch(error => {

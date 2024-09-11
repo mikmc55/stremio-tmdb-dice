@@ -52,11 +52,15 @@ router.get("/:configParameters?/manifest.json", async (req, res) => {
 });
 
 router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res) => {
-    const { type, id, extra } = req.params;
+    const { configParameters, type, id, extra } = req.params;
     let extraParams = req.query;
     const cacheDuration = req.query.cacheDuration || '3d';
 
-    log.info(`Received catalog request with type: ${type}, id: ${id}`);
+    // Extraction du paramètre de configuration
+    const config = configParameters ? JSON.parse(decodeURIComponent(configParameters)) : {};
+    const { language } = config;
+
+    log.info(`Received catalog request with type: ${type}, id: ${id}, language: ${language}`);
     log.info(`Received extra parameters: ${JSON.stringify(extraParams)}`);
     log.info(`Cache duration set to: ${cacheDuration}`);
 
@@ -76,6 +80,10 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
                 return acc;
             }, {});
             extraParams = { ...extraParams, ...extraParamsFromUrl };
+        }
+
+        if (language) {
+            extraParams.language = language;
         }
 
         if (extraParams.genre) {
