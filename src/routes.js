@@ -23,7 +23,7 @@ router.get("/:configParameters?/manifest.json", async (req, res) => {
     try {
         const { configParameters } = req.params;
         const config = configParameters ? JSON.parse(decodeURIComponent(configParameters)) : {};
-        const { language } = config;
+        const { language, tmdbApiKey } = config; // Extraction de tmdbApiKey
 
         log.debug(`Received request for manifest with language: ${language}`);
 
@@ -33,7 +33,8 @@ router.get("/:configParameters?/manifest.json", async (req, res) => {
 
             if (!genresExist) {
                 log.debug(`Fetching genres for language: ${language}`);
-                await fetchAndStoreGenres(language); // Attendez la fin du fetch et du stockage
+                // Passer la clé API à la fonction fetchAndStoreGenres
+                await fetchAndStoreGenres(language, tmdbApiKey); // Attendez la fin du fetch et du stockage
                 log.debug(`Genres fetched and stored for language: ${language}`);
             } else {
                 log.debug(`Genres already fetched for language: ${language}`);
@@ -58,7 +59,7 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
 
     // Extraction du paramètre de configuration
     const config = configParameters ? JSON.parse(decodeURIComponent(configParameters)) : {};
-    const { language, hideNoPoster } = config; // Extraction de hideNoPoster depuis la configuration
+    const { language, hideNoPoster, tmdbApiKey } = config; // Extraction de tmdbApiKey
 
     log.info(`Received catalog request with type: ${type}, id: ${id}, language: ${language}`);
     log.info(`Received extra parameters: ${JSON.stringify(extraParams)}`);
@@ -100,7 +101,7 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
             }
         }
 
-        const metas = await fetchData(type, id, extraParams, cacheDuration);
+        const metas = await fetchData(type, id, extraParams, cacheDuration, tmdbApiKey);
 
         log.info(`Fetched ${metas.length} items from TMDB for type: ${type}, id: ${id}`);
 

@@ -31,7 +31,6 @@ document.addEventListener('DOMContentLoaded', () => {
             tmdbApiKey: tmdbApiKey,
             language: language,
             hideNoPoster: document.getElementById('hide-no-poster').checked,
-            filterAdult: document.getElementById('filter-adult').checked
         };
         return config;
     }

@@ -103,7 +103,7 @@ const buildQueryParams = (params) => {
     return queryParams.join('&');
 };
 
-const fetchData = async (type, id, extra, cacheDuration = '3d') => {
+const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMDB_API_KEY) => {
     try {
         // Mise à jour de la clé de cache pour inclure la langue
         const language = extra.language || 'default';
@@ -120,7 +120,7 @@ const fetchData = async (type, id, extra, cacheDuration = '3d') => {
 
         const queryParams = buildQueryParams({ ...extra, page });
 
-        const url = `${TMDB_BASE_URL}/discover/${type}?api_key=${TMDB_API_KEY}&${queryParams}`;
+        const url = `${TMDB_BASE_URL}/discover/${type}?api_key=${tmdbApiKey}&${queryParams}`;
         log.info(`Fetching data from TMDB: ${url}`);
 
         return new Promise((resolve, reject) => {
@@ -157,14 +157,14 @@ const fetchData = async (type, id, extra, cacheDuration = '3d') => {
     }
 };
 
-const fetchGenres = async (type, language) => {
+const fetchGenres = async (type, language, tmdbApiKey = TMDB_API_KEY) => {
     const mediaType = type === 'series' ? 'tv' : 'movie';
     const endpoint = `/genre/${mediaType}/list`;
 
     try {
         const response = await axios.get(`${TMDB_BASE_URL}${endpoint}`, {
             params: {
-                api_key: TMDB_API_KEY,
+                api_key: tmdbApiKey, // Utilisation de la clé API fournie ou par défaut
                 language: language // Inclure la langue dans les paramètres
             }
         });
@@ -211,7 +211,6 @@ const storeGenresInDb = (genres, mediaType, language) => {
     });
 };
 
-// Fonction pour vérifier si les genres existent déjà pour une langue donnée
 const checkGenresExistForLanguage = async (language) => {
     return new Promise((resolve, reject) => {
         log.debug(`Checking if genres exist for language: ${language}`);
@@ -232,10 +231,11 @@ const checkGenresExistForLanguage = async (language) => {
 };
 
 // Fonction pour récupérer et stocker les genres pour une langue donnée
-const fetchAndStoreGenres = async (language) => {
+const fetchAndStoreGenres = async (language, tmdbApiKey = TMDB_API_KEY) => {
     try {
-        const movieGenres = await fetchGenres('movie', language);
-        const tvGenres = await fetchGenres('series', language);
+        // Utilisation de la clé API fournie ou de la clé par défaut
+        const movieGenres = await fetchGenres('movie', language, tmdbApiKey);
+        const tvGenres = await fetchGenres('series', language, tmdbApiKey);
 
         await storeGenresInDb(movieGenres, 'movie', language);
         await storeGenresInDb(tvGenres, 'tv', language);
