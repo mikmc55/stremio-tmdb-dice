@@ -6,22 +6,22 @@ const getCurrentYear = () => new Date().getFullYear();
 
 const generateYearIntervals = (startYear = 1880, endYear = getCurrentYear(), interval = 4) => {
     const intervals = [];
-    
+
     // Corriger l'année de fin pour éviter les problèmes avec un intervalle unique
     endYear = Math.max(endYear, startYear);
-    
-    for (let year = startYear; year < endYear; year += interval) {
-        const nextYear = Math.min(year + interval - 1, endYear);
-        intervals.push(`${year}-${nextYear}`);
+
+    for (let year = endYear; year >= startYear; year -= interval) {
+        const nextYear = Math.max(year - interval + 1, startYear);
+        intervals.push(`${nextYear}-${year}`);
     }
-    
-    // Ajuster le dernier intervalle pour inclure jusqu'à endYear
+
+    // Ajuster le premier intervalle pour inclure jusqu'à startYear
     if (intervals.length > 0) {
-        const lastInterval = intervals[intervals.length - 1];
-        const [lastStart, lastEnd] = lastInterval.split('-').map(Number);
-    
-        if (lastEnd < endYear) {
-            intervals[intervals.length - 1] = `${lastStart}-${endYear}`;
+        const firstInterval = intervals[intervals.length - 1];
+        const [firstStart, firstEnd] = firstInterval.split('-').map(Number);
+
+        if (firstStart > startYear) {
+            intervals[intervals.length - 1] = `${startYear}-${firstEnd}`;
         }
     } else {
         // Si aucun intervalle n'a été ajouté, ajouter un intervalle unique pour toute la période
