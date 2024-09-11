@@ -31,13 +31,16 @@ router.get("/:configParameters?/manifest.json", async (req, res) => {
     }
 });
 
+// Route pour le catalogue
 router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res) => {
     const { type, id, extra } = req.params;
     let extraParams = req.query; // Les paramètres supplémentaires comme genre, rating, year, skip
+    const cacheDuration = req.query.cacheDuration || '3d'; // Durée du cache par défaut : 3 jours
 
     // Logs pour les paramètres reçus
     log.info(`Received catalog request with type: ${type}, id: ${id}`);
     log.info(`Received extra parameters: ${JSON.stringify(extraParams)}`);
+    log.info(`Cache duration set to: ${cacheDuration}`);
 
     // Validation des paramètres
     if (!['movie', 'series'].includes(type)) {
@@ -71,7 +74,7 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
         }
 
         // Appel de fetchData avec les paramètres
-        const metas = await fetchData(type, id, extraParams);
+        const metas = await fetchData(type, id, extraParams, cacheDuration);
 
         // Logs pour les données récupérées
         log.info(`Fetched ${metas.length} items from TMDB for type: ${type}, id: ${id}`);

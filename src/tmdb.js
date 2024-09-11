@@ -22,6 +22,7 @@ const getGenreId = (type, genreName) => {
     });
 };
 
+// Fonction pour construire les paramètres de la requête
 const buildQueryParams = (params) => {
     const queryParams = [];
 
@@ -53,13 +54,14 @@ const buildQueryParams = (params) => {
     return queryParams.join('&');
 };
 
-const fetchData = async (type, id, extra) => {
+// Fonction pour récupérer les données
+const fetchData = async (type, id, extra, cacheDuration) => {
     try {
         // Génération de la clé de cache
         const cacheKey = `catalog_${type}_${id}_${JSON.stringify(extra)}`;
 
         // Vérification du cache
-        const cachedData = await getCache(cacheKey);
+        const cachedData = await getCache(cacheKey, cacheDuration);
         if (cachedData) {
             log.info(`Returning cached data for key: ${cacheKey}`);
             return cachedData;
@@ -97,7 +99,7 @@ const fetchData = async (type, id, extra) => {
         }));
 
         // Mettre en cache les résultats
-        setCache(cacheKey, metas);
+        setCache(cacheKey, metas, cacheDuration);
 
         return metas;
     } catch (error) {
