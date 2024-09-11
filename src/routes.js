@@ -9,14 +9,21 @@ const router = express.Router();
 
 router.use(requestLogger);
 
+const isPublicInstance = process.env.PUBLIC_INSTANCE === 'true'; // Vérifier la variable d'environnement
+
+// Déterminer le dossier à utiliser en fonction de la variable d'environnement
+const baseDir = isPublicInstance ? 'public' : 'private';
+
+// Rediriger la route de base vers /configure
 router.get("/", (req, res) => {
     log.info('Route /: Redirecting to /configure');
     res.redirect("/configure");
 });
 
+// Servir le fichier configure.html en fonction de PUBLIC_INSTANCE
 router.get("/:configParameters?/configure", (req, res) => {
-    log.info('Route /:configParameters?/configure: Sending configure.html page');
-    res.sendFile(path.join(__dirname, '../public/configure.html'));
+    log.info(`Route /:configParameters?/configure: Sending ${baseDir}/configure.html page`);
+    res.sendFile(path.join(__dirname, `../${baseDir}/configure.html`));
 });
 
 router.get("/:configParameters?/manifest.json", async (req, res) => {
