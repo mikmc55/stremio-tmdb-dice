@@ -2,10 +2,6 @@ const fs = require('fs');
 const sqlite3 = require('sqlite3').verbose();
 const log = require('./logger');
 const path = require('path');
-const axios = require('axios');
-
-const TMDB_API_KEY = process.env.TMDB_API_KEY;
-const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 
 // Base de données SQLite pour les genres
 const dbDir = path.join(__dirname, '../db');
