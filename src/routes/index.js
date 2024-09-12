@@ -23,5 +23,4 @@ router.use((err, req, res, next) => {
     res.status(500).send(`Something broke! If you need help, please provide this timestamp to the developer : ${errorTime}`);
 });
 
-
 module.exports = router;
