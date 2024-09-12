@@ -1,47 +1,8 @@
 const express = require('express');
-const path = require('path');
-const log = require('./logger');
-const { requestLogger, errorHandler } = require('./middleware');
-const { fetchData, getGenreId, checkGenresExistForLanguage, fetchAndStoreGenres } = require('./tmdb');
-const generateManifest = require('./config');
+const log = require('../helpers/logger');
+const { fetchData, getGenreId } = require('../api/tmdb');
 
 const router = express.Router();
-
-router.use(requestLogger);
-
-const isPublicInstance = process.env.PUBLIC_INSTANCE === 'true';
-const baseDir = isPublicInstance ? 'public' : 'private';
-
-router.get("/", (req, res) => {
-    log.info('Redirecting to /configure');
-    res.redirect("/configure");
-});
-
-router.get("/:configParameters?/configure", (req, res) => {
-    log.info(`Sending ${baseDir}/configure.html`);
-    res.sendFile(path.join(__dirname, `../${baseDir}/configure.html`));
-});
-
-router.get("/:configParameters?/manifest.json", async (req, res) => {
-    const { configParameters } = req.params;
-    const config = configParameters ? JSON.parse(decodeURIComponent(configParameters)) : {};
-    const { language, tmdbApiKey } = config;
-
-    log.debug(`Manifest request for language: ${language}`);
-
-    try {
-        if (language && !(await checkGenresExistForLanguage(language))) {
-            log.debug(`Fetching genres for language: ${language}`);
-            await fetchAndStoreGenres(language, tmdbApiKey);
-        }
-
-        const manifest = await generateManifest(language);
-        res.json(manifest);
-    } catch (error) {
-        log.error(`Error generating manifest: ${error.message}`);
-        res.status(500).json({ error: 'Error generating manifest' });
-    }
-});
 
 router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res) => {
     const { configParameters, type, id, extra } = req.params;
@@ -98,7 +59,5 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
         res.status(500).json({ metas: [] });
     }
 });
-
-router.use(errorHandler);
 
 module.exports = router;

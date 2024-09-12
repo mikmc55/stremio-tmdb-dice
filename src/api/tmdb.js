@@ -1,8 +1,8 @@
 const axios = require('axios');
-const log = require('./logger');
-const { genresDb, cacheDb } = require('./db');
-const { getCatalogCache, setCatalogCache } = require('./cache');
-const queue = require('./ratelimit');
+const log = require('../helpers/logger');
+const { genresDb, cacheDb } = require('../helpers/db');
+const { getCatalogCache, setCatalogCache } = require('../helpers/cache');
+const queue = require('../helpers/ratelimit');
 const { getFanartPoster } = require('./fanart');
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY;

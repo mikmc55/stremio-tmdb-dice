@@ -15,7 +15,7 @@ const uppercaseLevelFormat = winston.format((info) => {
 })();
 
 const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
-const LOG_FILE_PATH = path.join(__dirname, '../log/application-%DATE%.log');
+const LOG_FILE_PATH = path.join(__dirname, '../../log/application-%DATE%.log');
 const MAX_FILES = process.env.LOG_INTERVAL_DELETION || '3d'; 
 
 const log = winston.createLogger({
@@ -47,7 +47,7 @@ const log = winston.createLogger({
 
 log.exceptions.handle(
     new DailyRotateFile({
-        filename: path.join(__dirname, '../log/exceptions-%DATE%.log'),
+        filename: path.join(__dirname, '../../log/exceptions-%DATE%.log'),
         datePattern: 'YYYY-MM-DD',
         maxSize: '20m',
         maxFiles: '30d'
