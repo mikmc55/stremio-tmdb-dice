@@ -2,12 +2,12 @@ const express = require('express');
 const configureRoutes = require('./configure');
 const manifestRoutes = require('./manifest');
 const catalogRoutes = require('./catalog');
-const testErrorRoutes = require('./testError');
 const log = require('../helpers/logger');
 
 const router = express.Router();
 
 router.use((req, res, next) => {
+    log.info(`--- Request received ---`);
     log.info(`${req.method} ${req.originalUrl}`);
     next();
 });
@@ -15,7 +15,6 @@ router.use((req, res, next) => {
 router.use(configureRoutes);
 router.use(manifestRoutes);
 router.use(catalogRoutes);
-router.use(testErrorRoutes);
 
 router.use((err, req, res, next) => {
     const errorTime = new Date().toISOString();
