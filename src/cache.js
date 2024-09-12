@@ -9,8 +9,8 @@ const cacheDurationToSeconds = (duration) => {
     const number = parseInt(value, 10);
 
     switch (unit) {
-        case 'd': return number * 86400; // 24 * 60 * 60
-        case 'h': return number * 3600;  // 60 * 60
+        case 'd': return number * 86400;
+        case 'h': return number * 3600;
         default: throw new Error('Invalid cache duration unit');
     }
 };

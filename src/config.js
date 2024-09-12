@@ -43,9 +43,9 @@ const generateManifest = async (language) => {
         return {
             id: 'community.stremiotmdbdice',
             version: '1.0.0',
-            logo: "https://i.imgur.com/jEPaX6R.png",
-            name: 'stremio-tmdb-dice',
-            description: 'Random content from TMDB',
+            logo: "https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg",
+            name: 'Stremio TMDB Dice',
+            description: 'A catalog featuring content from TMDB with filters that allow for generating random content recommendations.',
             types: ['movie', 'series'],
             idPrefixes: ['tt'],
             resources: ['catalog'],

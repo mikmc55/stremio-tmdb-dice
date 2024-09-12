@@ -86,7 +86,6 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
             }
         }
 
-        // Ajout du tri
         if (extraParams.sort) {
             extraParams.sort_by = extraParams.sort;
         }
