@@ -1,10 +1,8 @@
 const axios = require('axios');
 
-const FANART_API_KEY = process.env.FANART_API_KEY;
-
-const getBestFanartPoster = async (tmdbId, preferredLang) => {
+const getFanartPoster = async (tmdbId, preferredLang, fanartApiKey) => {
     try {
-        const url = `https://webservice.fanart.tv/v3/movies/${tmdbId}/?api_key=${FANART_API_KEY}`;
+        const url = `https://webservice.fanart.tv/v3/movies/${tmdbId}/?api_key=${fanartApiKey}`;
         
         console.log(`Fetching Fanart logos from: ${url}`);
 
@@ -38,4 +36,4 @@ const getBestFanartPoster = async (tmdbId, preferredLang) => {
     }
 };
 
-module.exports = { getBestFanartPoster };
+module.exports = { getFanartPoster };

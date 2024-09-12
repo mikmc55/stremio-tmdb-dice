@@ -3,7 +3,7 @@ const log = require('./logger');
 const { genresDb, cacheDb } = require('./db');
 const { getCatalogCache, setCatalogCache } = require('./cache');
 const queue = require('./ratelimit');
-const { getBestFanartPoster } = require('./fanart');
+const { getFanartPoster } = require('./fanart');
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
@@ -46,7 +46,7 @@ const getGenreId = (mediaType, genreName) =>
         return queryParams.join('&');
     };
     
-    const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = process.env.TMDB_API_KEY, fanartApiKey = process.env.FANART_API_KEY) => { // Utilisez les variables d'environnement par défaut
+    const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = process.env.TMDB_API_KEY, fanartApiKey) => { // Utilisez les variables d'environnement par défaut
         try {
             const mediaType = type === 'series' ? 'tv' : type;
             const language = extra.language || 'default';
@@ -111,7 +111,15 @@ const getGenreId = (mediaType, genreName) =>
                                 console.warn(`No genre IDs for item ${item.id}`);
                             }
     
-                            const logo = fanartApiKey ? await getBestFanartPoster(item.id, language, fanartApiKey) : null; // Passez la clé API Fanart
+                            let logo = null;
+
+                            if (!fanartApiKey) {
+                                fanartApiKey = process.env.FANART_API_KEY || '';
+                            }
+                            
+                            if (fanartApiKey) {
+                                logo = await getFanartPoster(item.id, language, fanartApiKey);
+                            }
     
                             return {
                                 id: item.id.toString(),
