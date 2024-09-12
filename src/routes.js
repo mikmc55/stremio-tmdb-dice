@@ -118,8 +118,7 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
 
         log.info(`Fetched ${metas.length} items from TMDB for type: ${mediaType}, id: ${id}`);
 
-        // Filtrage des contenus sans poster si hideNoPoster est défini sur 'true'
-        const shouldHideNoPoster = extraParams.hideNoPoster === 'true'; // Comparaison correcte
+        const shouldHideNoPoster = extraParams.hideNoPoster === 'true';
         const filteredMetas = shouldHideNoPoster ? metas.filter(meta => meta.poster !== null) : metas;
 
         res.json({ metas: filteredMetas });

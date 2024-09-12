@@ -112,12 +112,11 @@ const buildQueryParams = (params) => {
 
 const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMDB_API_KEY) => {
     try {
-        // Remplacement de 'series' par 'tv' pour les séries
         const mediaType = type === 'series' ? 'tv' : type; 
-
-        // Mise à jour de la clé de cache pour inclure la langue
         const language = extra.language || 'default';
         const cacheKey = `catalog_${mediaType}_${id}_${JSON.stringify(extra)}_lang_${language}`;
+
+        log.info(`Generated cacheKey: ${cacheKey}`);
 
         const cachedData = await getCache(cacheKey, cacheDuration);
         if (cachedData) {
@@ -127,34 +126,39 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
 
         const skip = extra.skip || 0;
         const page = await determinePageFromSkip(skip, cacheDb);
-
         const queryParams = buildQueryParams({ ...extra, page });
-
-        // Utiliser le bon type ('tv' pour les séries et non 'series')
         const url = `${TMDB_BASE_URL}/discover/${mediaType}?api_key=${tmdbApiKey}&${queryParams}`;
         log.info(`Fetching data from TMDB: ${url}`);
 
         return new Promise((resolve, reject) => {
             queue.push({
-                fn: () => axios.get(url).then(response => {
+                fn: () => axios.get(url).then(async response => {
                     const results = response.data.results;
-
                     log.info(`Received ${results.length} results from TMDB for type: ${mediaType}`);
 
-                    const metas = results.map(item => ({
-                        id: item.id.toString(),
-                        name: item.title || item.name,
-                        poster: item.poster_path ? `https://image.tmdb.org/t/p/w600_and_h900_bestv2${item.poster_path}` : null,
-                        banner: item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : null,
-                        type: mediaType, // Utilisation de mediaType au lieu de type
-                        description: item.overview,
-                        releaseInfo: item.release_date || item.first_air_date,
-                        imdbRating: item.vote_average ? item.vote_average.toFixed(1) : null,
-                        genre: item.genre_ids
+                    // Map to fetch genre names
+                    const metas = await Promise.all(results.map(async item => {
+                        let genreNames = [];
+                        if (item.genre_ids && item.genre_ids.length > 0) {
+                            genreNames = await getGenreNames(item.genre_ids, mediaType, language);
+                            log.info(`Fetched genres for item ${item.id}: ${genreNames.join(', ')}`);
+                        } else {
+                            log.warn(`No genre IDs found for item ${item.id}`);
+                        }
+                        return {
+                            id: item.id.toString(),
+                            name: item.title || item.name,
+                            poster: item.poster_path ? `https://image.tmdb.org/t/p/w600_and_h900_bestv2${item.poster_path}` : null,
+                            banner: item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : null,
+                            type: mediaType,
+                            description: item.overview,
+                            releaseInfo: item.release_date || item.first_air_date,
+                            imdbRating: item.vote_average ? item.vote_average.toFixed(1) : null,
+                            genres: genreNames
+                        };
                     }));
 
                     setCache(cacheKey, metas, cacheDuration, page, skip);
-
                     resolve(metas);
                 }).catch(error => {
                     log.error(`Error fetching data from TMDB: ${error.message}`);
@@ -167,6 +171,33 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
         throw error;
     }
 };
+
+// Function to get genre names from the database
+const getGenreNames = (genreIds, mediaType, language) => {
+    return new Promise((resolve, reject) => {
+        if (!genreIds || genreIds.length === 0) {
+            log.warn(`No genre IDs provided for mediaType: ${mediaType}`);
+            return resolve([]);
+        }
+
+        const placeholders = genreIds.map(() => '?').join(',');
+        const sql = `SELECT genre_name FROM genres WHERE genre_id IN (${placeholders}) AND media_type = ? AND language = ?`;
+
+        log.info(`Executing SQL to fetch genre names: ${sql}`);
+        
+        genresDb.all(sql, [...genreIds, mediaType, language], (err, rows) => {
+            if (err) {
+                log.error('Error fetching genre names from database:', err);
+                resolve([]); // Instead of rejecting, resolve with an empty array to avoid breaking fetchData
+            } else {
+                const genreNames = rows.map(row => row.genre_name);
+                log.info(`Fetched genre names: ${genreNames.join(', ')}`);
+                resolve(genreNames);
+            }
+        });
+    });
+};
+
 
 const fetchGenres = async (type, language, tmdbApiKey = TMDB_API_KEY) => {
     const mediaType = type === 'series' ? 'tv' : 'movie';
