@@ -5,6 +5,19 @@ const { cacheDb } = require('./db');
 const log = require('./logger');
 const baseUrl = process.env.BASE_URL || 'http://localhost:7000';
 
+const DEFAULT_CATALOG_CACHE_DURATION = process.env.CATALOG_CONTENT_CACHE_DURATION || '3d';
+const DEFAULT_RPDB_POSTER_CACHE_DURATION = process.env.RPDB_POSTER_CACHE_DURATION || '3d';
+
+const posterDirectory = path.join(__dirname, '../../db/rpdbPosters');
+
+if (!fs.existsSync(posterDirectory)) {
+    fs.mkdirSync(posterDirectory, { recursive: true });
+}
+
+const formatFileName = (posterId) => {
+    return posterId.replace(/[^a-zA-Z0-9-_]/g, '_');
+};
+
 const cacheDurationToSeconds = (duration) => {
     const match = duration.match(/^(\d+)([dh])$/);
     if (!match) throw new Error('Invalid cache duration format');
@@ -19,10 +32,7 @@ const cacheDurationToSeconds = (duration) => {
     }
 };
 
-// Obtenir la durée du cache depuis les variables d'environnement ou utiliser une valeur par défaut
-const DEFAULT_CACHE_DURATION = process.env.CATALOG_CONTENT_CACHE_DURATION || '3d';
-
-const setCatalogCache = (key, value, duration = DEFAULT_CACHE_DURATION, page = 1, skip = 0, genre = null, year = null, rating = null, mediaType = null) => {
+const setCatalogCache = (key, value, duration = DEFAULT_CATALOG_CACHE_DURATION, page = 1, skip = 0, genre = null, year = null, rating = null, mediaType = null) => {
     try {
         genre = genre === null ? "undefined" : genre;
         year = year === null ? "undefined" : year;
@@ -44,7 +54,7 @@ const setCatalogCache = (key, value, duration = DEFAULT_CACHE_DURATION, page = 1
     }
 };
 
-const getCatalogCache = (key, cacheDuration = DEFAULT_CACHE_DURATION) => {
+const getCatalogCache = (key, cacheDuration = DEFAULT_CATALOG_CACHE_DURATION) => {
     const cacheDurationInSeconds = cacheDurationToSeconds(cacheDuration);
 
     return new Promise((resolve, reject) => {
@@ -82,28 +92,28 @@ const getCatalogCache = (key, cacheDuration = DEFAULT_CACHE_DURATION) => {
     });
 };
 
-const posterDirectory = path.join(__dirname, '../../db/rpdbPosters');
-
-if (!fs.existsSync(posterDirectory)) {
-    fs.mkdirSync(posterDirectory, { recursive: true });
-}
-
-const formatFileName = (posterId) => {
-    return posterId.replace(/[^a-zA-Z0-9-_]/g, '_');
-};
-
 const getCachedPoster = async (posterId) => {
     const formattedPosterId = formatFileName(posterId);
     const filePath = path.join(posterDirectory, `${formattedPosterId}.jpg`);
+    const cacheDurationInSeconds = cacheDurationToSeconds(DEFAULT_RPDB_POSTER_CACHE_DURATION);
 
     if (fs.existsSync(filePath)) {
-        const posterUrl = `${baseUrl}/poster/${formattedPosterId}.jpg`;
-        log.debug(`Cache hit for poster id ${posterId}, serving from ${posterUrl}`);
-        return { poster_url: posterUrl };
+        const stats = fs.statSync(filePath);
+        const fileAgeInSeconds = (Date.now() - stats.mtimeMs) / 1000;
+
+        if (fileAgeInSeconds < cacheDurationInSeconds) {
+            const posterUrl = `${baseUrl}/poster/${formattedPosterId}.jpg`;
+            log.debug(`Cache hit for poster id ${posterId}, serving from ${posterUrl}`);
+            return { poster_url: posterUrl };
+        } else {
+            log.debug(`Cache expired for poster id ${posterId}`);
+            fs.unlinkSync(filePath); // Supprimer le fichier expiré
+        }
     } else {
         log.debug(`Cache miss for poster id ${posterId}`);
-        return null;
     }
+
+    return null;
 };
 
 const setCachedPoster = async (posterId, posterUrl) => {
