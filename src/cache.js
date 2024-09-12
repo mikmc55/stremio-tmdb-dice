@@ -15,7 +15,7 @@ const cacheDurationToSeconds = (duration) => {
     }
 };
 
-const setCache = (key, value, duration = '3d', page = 1, skip = 0, genre = null, year = null, rating = null, mediaType = null) => {
+const setCatalogCache = (key, value, duration = '3d', page = 1, skip = 0, genre = null, year = null, rating = null, mediaType = null) => {
     try {
         genre = genre === null ? "undefined" : genre;
         year = year === null ? "undefined" : year;
@@ -37,7 +37,7 @@ const setCache = (key, value, duration = '3d', page = 1, skip = 0, genre = null,
     }
 };
 
-const getCache = (key, cacheDuration = '3d') => {
+const getCatalogCache = (key, cacheDuration = '3d') => {
     const cacheDurationInSeconds = cacheDurationToSeconds(cacheDuration);
 
     return new Promise((resolve, reject) => {
@@ -76,6 +76,6 @@ const getCache = (key, cacheDuration = '3d') => {
 };
 
 module.exports = {
-    setCache,
-    getCache
+    setCatalogCache,
+    getCatalogCache
 };
