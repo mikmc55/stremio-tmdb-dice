@@ -143,7 +143,8 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
         }
 
         log.debug(`Skip value: ${skip}`);
-        const page = await determinePageFromSkip(skip, genre, rating, year, mediaType, cacheDb);
+        const page = await determinePageFromSkip(skip, genre, rating, year, mediaType, sort_by, cacheDb);
+
         log.debug(`Determined page: ${page}`);
 
         // Construction des paramètres de requête pour TMDB
