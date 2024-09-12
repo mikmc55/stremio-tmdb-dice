@@ -6,7 +6,6 @@ const queue = require('../helpers/ratelimit');
 const { getFanartPoster } = require('./fanart');
 const { getPosterUrl, cachePosters } = require('./rpdb');
 
-const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 
 const getGenreId = (mediaType, genreName) => 
@@ -46,7 +45,7 @@ const buildQueryParams = (params) => {
     return queryParams.join('&');
 };
 
-const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = process.env.TMDB_API_KEY, rpdbApiKey, fanartApiKey) => {
+const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey, rpdbApiKey, fanartApiKey) => {
     try {
         const mediaType = type === 'series' ? 'tv' : type;
         const language = extra.language || 'default';
@@ -120,9 +119,6 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = pro
                             }
                         
                             let logo = null;
-                            if (!fanartApiKey) {
-                                fanartApiKey = process.env.FANART_API_KEY || '';
-                            }
                         
                             if (fanartApiKey) {
                                 logo = await getFanartPoster(item.id, language, fanartApiKey);
