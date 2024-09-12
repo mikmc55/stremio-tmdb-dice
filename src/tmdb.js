@@ -16,7 +16,7 @@ const getGenreId = (mediaType, genreName) =>
         });
     });
 
-    const determinePageFromSkip = async (skip, genre, rating, year, cacheDb) => {
+    const determinePageFromSkip = async (skip, genre, rating, year, mediaType, cacheDb) => {
         try {
             // Décodage des paramètres pour gérer les caractères spéciaux
             const decodedSkip = decodeURIComponent(skip);
@@ -24,16 +24,16 @@ const getGenreId = (mediaType, genreName) =>
             const decodedRating = decodeURIComponent(rating || '');
             const decodedYear = decodeURIComponent(year || '');
     
-            log.debug(`Determining page from skip: ${decodedSkip}, genre: ${decodedGenre}, rating: ${decodedRating}, year: ${decodedYear}`);
+            log.debug(`Determining page from skip: ${decodedSkip}, genre: ${decodedGenre}, rating: ${decodedRating}, year: ${decodedYear}, mediaType: ${mediaType}`);
     
             // Requête pour trouver l'entrée en cache correspondant au skip avec les paramètres supplémentaires
             const cachedEntry = await new Promise((resolve, reject) => {
                 cacheDb.get(
-                    "SELECT page, skip FROM cache WHERE skip = ? AND genre = ? AND rating = ? AND year = ? LIMIT 1",
-                    [decodedSkip, decodedGenre, decodedRating, decodedYear],
+                    "SELECT page, skip FROM cache WHERE skip = ? AND genre = ? AND rating = ? AND year = ? AND mediaType = ? LIMIT 1",
+                    [decodedSkip, decodedGenre, decodedRating, decodedYear, mediaType],
                     (err, row) => {
                         if (err) {
-                            log.error(`Error querying cache for skip ${decodedSkip} with genre ${decodedGenre}, rating ${decodedRating}, year ${decodedYear}: ${err.message}`);
+                            log.error(`Error querying cache for skip ${decodedSkip} with genre ${decodedGenre}, rating ${decodedRating}, year ${decodedYear}, mediaType ${mediaType}: ${err.message}`);
                             reject(err);
                         } else {
                             resolve(row);
@@ -50,11 +50,11 @@ const getGenreId = (mediaType, genreName) =>
             // Requête pour trouver le dernier enregistrement dans le cache avec les paramètres supplémentaires
             const lastEntry = await new Promise((resolve, reject) => {
                 cacheDb.get(
-                    "SELECT page, skip, genre, rating, year FROM cache WHERE genre = ? AND rating = ? AND year = ? ORDER BY skip DESC LIMIT 1",
-                    [decodedGenre, decodedRating, decodedYear],
+                    "SELECT page, skip, genre, rating, year FROM cache WHERE genre = ? AND rating = ? AND year = ? AND mediaType = ? ORDER BY skip DESC LIMIT 1",
+                    [decodedGenre, decodedRating, decodedYear, mediaType],
                     (err, row) => {
                         if (err) {
-                            log.error(`Error querying last entry with genre ${decodedGenre}, rating ${decodedRating}, year ${decodedYear}: ${err.message}`);
+                            log.error(`Error querying last entry with genre ${decodedGenre}, rating ${decodedRating}, year ${decodedYear}, mediaType ${mediaType}: ${err.message}`);
                             reject(err);
                         } else {
                             resolve(row);
@@ -128,7 +128,7 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
         }
 
         log.debug(`Skip value: ${skip}`);
-        const page = await determinePageFromSkip(skip, genre, rating, year, cacheDb);
+        const page = await determinePageFromSkip(skip, genre, rating, year, mediaType, cacheDb);
         log.debug(`Determined page: ${page}`);
 
         // Construction des paramètres de requête pour TMDB
@@ -166,7 +166,7 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
 
                     log.debug(`Metas prepared for caching: ${JSON.stringify(metas.map(meta => ({ id: meta.id, name: meta.name })))}`);
                     // Mise en cache des données
-                    setCache(cacheKey, metas, cacheDuration, page, skip, genre, year, rating);
+                    setCache(cacheKey, metas, cacheDuration, page, skip, genre, year, rating, mediaType);
                     resolve(metas);
                 }).catch(error => {
                     log.error(`TMDB fetch error: ${error.message}`);

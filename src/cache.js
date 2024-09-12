@@ -15,13 +15,13 @@ const cacheDurationToSeconds = (duration) => {
     }
 };
 
-const setCache = (key, value, duration = '3d', page = 1, skip = 0, genre = null, year = null, rating = null) => {
+const setCache = (key, value, duration = '3d', page = 1, skip = 0, genre = null, year = null, rating = null, mediaType = null) => {
     try {
         const durationInSeconds = cacheDurationToSeconds(duration);
         const expireTime = Math.floor(Date.now() / 1000) + durationInSeconds;
 
-        const query = `INSERT OR REPLACE INTO cache (key, value, timestamp, page, skip, genre, year, rating) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
-        cacheDb.run(query, [key, JSON.stringify(value), expireTime, page, skip, genre, year, rating], (err) => {
+        const query = `INSERT OR REPLACE INTO cache (key, value, timestamp, page, skip, genre, year, rating, mediaType) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        cacheDb.run(query, [key, JSON.stringify(value), expireTime, page, skip, genre, year, rating, mediaType], (err) => {
             if (err) {
                 log.error(`Failed to set cache for key ${key}: ${err.message}`);
             } else {
@@ -38,7 +38,7 @@ const getCache = (key, cacheDuration = '3d') => {
 
     return new Promise((resolve, reject) => {
         cacheDb.get(
-            `SELECT value, timestamp, page, skip, genre, year, rating FROM cache WHERE key = ?`,
+            `SELECT value, timestamp, page, skip, genre, year, rating, mediaType FROM cache WHERE key = ?`,
             [key],
             (err, row) => {
                 if (err) {
@@ -59,7 +59,8 @@ const getCache = (key, cacheDuration = '3d') => {
                         skip: row.skip,
                         genre: row.genre,
                         year: row.year,
-                        rating: row.rating
+                        rating: row.rating,
+                        mediaType: row.mediaType
                     });
                 } else {
                     log.debug(`Cache expired for key ${key}`);
