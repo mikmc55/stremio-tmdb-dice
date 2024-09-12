@@ -86,6 +86,11 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
             }
         }
 
+        // Ajout du tri
+        if (extraParams.sort) {
+            extraParams.sort_by = extraParams.sort;
+        }
+
         log.debug(`Extra parameters after processing: ${JSON.stringify(extraParams)}`);
         const metas = await fetchData(mediaType, id, extraParams, cacheDuration, tmdbApiKey);
         log.info(`Fetched ${metas.length} items from TMDB`);

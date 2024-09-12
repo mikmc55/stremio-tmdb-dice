@@ -55,9 +55,10 @@ const generateManifest = async (language) => {
                     id: "random_movies",
                     name: "Random Movies",
                     extra: [
+                        { name: "sort", options: ["Popularity", "Revenue", "Primary Release Date", "Vote Count"], isRequired: false },
                         { name: "genre", options: movieGenres.length ? movieGenres : ["No genres available"], isRequired: false },
-                        { name: "rating", options: ["8-10", "6-8", "4-6", "2-4", "0-2"], isRequired: true },
-                        { name: "year", options: yearIntervals, isRequired: true },
+                        { name: "rating", options: ["8-10", "6-8", "4-6", "2-4", "0-2"], isRequired: false },
+                        { name: "year", options: yearIntervals, isRequired: false },
                         { name: 'skip', isRequired: false },
                     ]
                 },
@@ -66,9 +67,10 @@ const generateManifest = async (language) => {
                     id: "random_series",
                     name: "Random Series",
                     extra: [
+                        { name: "sort", options: ["Popularity", "First Air Date", "Vote Count"], isRequired: false },
                         { name: "genre", options: seriesGenres.length ? seriesGenres : ["No genres available"], isRequired: false },
-                        { name: "rating", options: ["8-10", "6-8", "4-6", "2-4", "0-2"], isRequired: true },
-                        { name: "year", options: yearIntervals, isRequired: true },
+                        { name: "rating", options: ["8-10", "6-8", "4-6", "2-4", "0-2"], isRequired: false },
+                        { name: "year", options: yearIntervals, isRequired: false },
                         { name: 'skip', isRequired: false },
                     ]
                 }

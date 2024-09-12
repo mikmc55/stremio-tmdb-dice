@@ -7,12 +7,12 @@ const requestLogger = (req, res, next) => {
 
     log.info('--- Request received ---');
     log.debug(`URL: ${fullUrl}`);
-    log.debug(`Method: ${req.method}`);
-    log.debug(`Query: ${JSON.stringify(req.query)}`);
-    log.debug(`Body: ${JSON.stringify(req.body)}`);
-    log.debug(`Headers: ${JSON.stringify(req.headers)}`);
-    log.debug(`User-Agent: ${userAgent}`);
-    log.debug(`Origin: ${origin}`);
+    // log.debug(`Method: ${req.method}`);
+    // log.debug(`Query: ${JSON.stringify(req.query)}`);
+    // log.debug(`Body: ${JSON.stringify(req.body)}`);
+    // log.debug(`Headers: ${JSON.stringify(req.headers)}`);
+    // log.debug(`User-Agent: ${userAgent}`);
+    // log.debug(`Origin: ${origin}`);
 
     next();
 };

@@ -16,24 +16,23 @@ const getGenreId = (mediaType, genreName) =>
         });
     });
 
-    const determinePageFromSkip = async (skip, genre, rating, year, mediaType, cacheDb) => {
+    const determinePageFromSkip = async (skip, genre, rating, year, mediaType, sort_by, cacheDb) => {
         try {
-            // Décodage des paramètres pour gérer les caractères spéciaux
             const decodedSkip = decodeURIComponent(skip);
-            const decodedGenre = decodeURIComponent(genre || '');
-            const decodedRating = decodeURIComponent(rating || '');
-            const decodedYear = decodeURIComponent(year || '');
+            const decodedGenre = decodeURIComponent(genre || 'undefined');
+            const decodedRating = decodeURIComponent(rating || 'undefined');
+            const decodedYear = decodeURIComponent(year || 'undefined');
+            const decodedsort_by = decodeURIComponent(sort_by || 'undefined');
     
-            log.debug(`Determining page from skip: ${decodedSkip}, genre: ${decodedGenre}, rating: ${decodedRating}, year: ${decodedYear}, mediaType: ${mediaType}`);
+            log.debug(`Determining page from skip: ${decodedSkip}, genre: ${decodedGenre}, rating: ${decodedRating}, year: ${decodedYear}, sort_by: ${decodedsort_by}, mediaType: ${mediaType}`);
     
-            // Requête pour trouver l'entrée en cache correspondant au skip avec les paramètres supplémentaires
             const cachedEntry = await new Promise((resolve, reject) => {
                 cacheDb.get(
-                    "SELECT page, skip FROM cache WHERE skip = ? AND genre = ? AND rating = ? AND year = ? AND mediaType = ? LIMIT 1",
-                    [decodedSkip, decodedGenre, decodedRating, decodedYear, mediaType],
+                    "SELECT page, skip FROM cache WHERE skip = ? AND genre = ? AND rating = ? AND year = ? AND sort_by = ? AND mediaType = ? LIMIT 1",
+                    [decodedSkip, decodedGenre, decodedRating, decodedYear, decodedsort_by, mediaType],
                     (err, row) => {
                         if (err) {
-                            log.error(`Error querying cache for skip ${decodedSkip} with genre ${decodedGenre}, rating ${decodedRating}, year ${decodedYear}, mediaType ${mediaType}: ${err.message}`);
+                            log.error(`Error querying cache for skip ${decodedSkip} with genre ${decodedGenre}, rating ${decodedRating}, year ${decodedYear}, sort_by ${decodedsort_by}, mediaType ${mediaType}: ${err.message}`);
                             reject(err);
                         } else {
                             resolve(row);
@@ -47,14 +46,13 @@ const getGenreId = (mediaType, genreName) =>
                 return cachedEntry.page;
             }
     
-            // Requête pour trouver le dernier enregistrement dans le cache avec les paramètres supplémentaires
             const lastEntry = await new Promise((resolve, reject) => {
                 cacheDb.get(
-                    "SELECT page, skip, genre, rating, year FROM cache WHERE genre = ? AND rating = ? AND year = ? AND mediaType = ? ORDER BY skip DESC LIMIT 1",
-                    [decodedGenre, decodedRating, decodedYear, mediaType],
+                    "SELECT page, skip, genre, rating, year, sort_by FROM cache WHERE genre = ? AND rating = ? AND year = ? AND sort_by = ? AND mediaType = ? ORDER BY skip DESC LIMIT 1",
+                    [decodedGenre, decodedRating, decodedYear, decodedsort_by, mediaType],
                     (err, row) => {
                         if (err) {
-                            log.error(`Error querying last entry with genre ${decodedGenre}, rating ${decodedRating}, year ${decodedYear}, mediaType ${mediaType}: ${err.message}`);
+                            log.error(`Error querying last entry with genre ${decodedGenre}, rating ${decodedRating}, year ${decodedYear}, sort_by ${decodedsort_by}, mediaType ${mediaType}: ${err.message}`);
                             reject(err);
                         } else {
                             resolve(row);
@@ -64,7 +62,7 @@ const getGenreId = (mediaType, genreName) =>
             });
     
             if (lastEntry) {
-                log.debug(`Last entry found: Page ${lastEntry.page}, Skip ${lastEntry.skip}, Genre ${lastEntry.genre}, Rating ${lastEntry.rating}, Year ${lastEntry.year}`);
+                log.debug(`Last entry found: Page ${lastEntry.page}, Skip ${lastEntry.skip}, Genre ${lastEntry.genre}, Rating ${lastEntry.rating}, Year ${lastEntry.year}, sort_by ${lastEntry.sort_by}`);
                 if (parseInt(decodedSkip, 10) > parseInt(lastEntry.skip, 10)) {
                     log.debug(`Skip ${decodedSkip} is greater than last entry skip ${lastEntry.skip}. Calculating new page.`);
                     return lastEntry.page + 1;
@@ -79,32 +77,48 @@ const getGenreId = (mediaType, genreName) =>
         }
     };
 
-const buildQueryParams = (params) => {
-    const queryParams = [];
-
-    if (params.year) {
-        const [startYear, endYear] = params.year.split('-');
-        if (startYear && endYear) {
-            queryParams.push(`primary_release_date.gte=${startYear}-01-01`);
-            queryParams.push(`primary_release_date.lte=${endYear}-12-31`);
+    const buildQueryParams = (params) => {
+        const queryParams = [];
+    
+        if (params.year) {
+            const [startYear, endYear] = params.year.split('-');
+            if (startYear && endYear) {
+                queryParams.push(`primary_release_date.gte=${startYear}-01-01`);
+                queryParams.push(`primary_release_date.lte=${endYear}-12-31`);
+            }
         }
-    }
-
-    if (params.rating) {
-        const [minRating, maxRating] = params.rating.split('-');
-        if (minRating && maxRating) {
-            queryParams.push(`vote_average.gte=${minRating}`);
-            queryParams.push(`vote_average.lte=${maxRating}`);
+    
+        if (params.rating) {
+            const [minRating, maxRating] = params.rating.split('-');
+            if (minRating && maxRating) {
+                queryParams.push(`vote_average.gte=${minRating}`);
+                queryParams.push(`vote_average.lte=${maxRating}`);
+            }
         }
-    }
-
-    Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && !['year', 'rating', 'hideNoPoster', 'skip', 'genre'].includes(key)) {
-            queryParams.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+    
+        if (params.sort_by) {
+            queryParams.push(`sort_by=${params.sort_by}`);
         }
-    });
+    
+        Object.entries(params).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && !['year', 'rating', 'hideNoPoster', 'skip', 'genre', 'sort_by'].includes(key)) {
+                queryParams.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+            }
+        });
+    
+        return queryParams.join('&');
+    };
 
-    return queryParams.join('&');
+// Fonction pour convertir sort_by en clé TMDB
+const convertsort_by = (sort_by) => {
+    const sort_byOptions = {
+        'Popularity': 'popularity.desc',
+        'Revenue': 'revenue.desc',
+        'Primary Release Date': 'primary_release_date.desc',
+        'Vote Count': 'vote_count.desc',
+        'First Air Date': 'first_air_date.desc'
+    };
+    return sort_byOptions[sort_by] || 'popularity.desc'; // Valeur par défaut si sort_by est invalide
 };
 
 const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMDB_API_KEY) => {
@@ -115,9 +129,10 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
         const year = extra.year || null;
         const rating = extra.rating || null;
         const skip = extra.skip || 0;
+        const sort_by = extra.sort_by ? convertsort_by(extra.sort_by) : null; // Convertir sort_by
 
         // Création de la clé de cache incluant les nouveaux paramètres
-        const cacheKey = `catalog_${mediaType}_${id}_${JSON.stringify(extra)}_lang_${language}_genre_${genre}_year_${year}_rating_${rating}`;
+        const cacheKey = `catalog_${mediaType}_${id}_${JSON.stringify(extra)}_lang_${language}_genre_${genre}_year_${year}_rating_${rating}_sort_by_${sort_by}`;
         log.info(`Cache key generated: ${cacheKey}`);
 
         // Récupération des données en cache
@@ -132,7 +147,7 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
         log.debug(`Determined page: ${page}`);
 
         // Construction des paramètres de requête pour TMDB
-        const queryParams = buildQueryParams({ ...extra, page });
+        const queryParams = buildQueryParams({ ...extra, page, sort_by }); // Utiliser sort_by converti
         const url = `${TMDB_BASE_URL}/discover/${mediaType}?api_key=${tmdbApiKey}&${queryParams}`;
         log.info(`Fetching from TMDB: ${url}`);
 
@@ -166,7 +181,7 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
 
                     log.debug(`Metas prepared for caching: ${JSON.stringify(metas.map(meta => ({ id: meta.id, name: meta.name })))}`);
                     // Mise en cache des données
-                    setCache(cacheKey, metas, cacheDuration, page, skip, genre, year, rating, mediaType);
+                    setCache(cacheKey, metas, cacheDuration, page, skip, genre, year, rating, mediaType, sort_by); // Ajout de sort_by
                     resolve(metas);
                 }).catch(error => {
                     log.error(`TMDB fetch error: ${error.message}`);
@@ -179,6 +194,7 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
         throw error;
     }
 };
+
 
 const getGenreNames = (genreIds, mediaType, language) => 
     new Promise((resolve, reject) => {
