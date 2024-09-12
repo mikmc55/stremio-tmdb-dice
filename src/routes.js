@@ -9,20 +9,17 @@ const router = express.Router();
 
 router.use(requestLogger);
 
-const isPublicInstance = process.env.PUBLIC_INSTANCE === 'true'; // Vérifier la variable d'environnement
+const isPublicInstance = process.env.PUBLIC_INSTANCE === 'true';
 
-// Déterminer le dossier à utiliser en fonction de la variable d'environnement
 const baseDir = isPublicInstance ? 'public' : 'private';
 
-// Rediriger la route de base vers /configure
 router.get("/", (req, res) => {
-    log.info('Route /: Redirecting to /configure');
+    log.info('Redirecting to /configure');
     res.redirect("/configure");
 });
 
-// Servir le fichier configure.html en fonction de PUBLIC_INSTANCE
 router.get("/:configParameters?/configure", (req, res) => {
-    log.info(`Route /:configParameters?/configure: Sending ${baseDir}/configure.html page`);
+    log.info(`Sending ${baseDir}/configure.html`);
     res.sendFile(path.join(__dirname, `../${baseDir}/configure.html`));
 });
 
@@ -30,31 +27,24 @@ router.get("/:configParameters?/manifest.json", async (req, res) => {
     try {
         const { configParameters } = req.params;
         const config = configParameters ? JSON.parse(decodeURIComponent(configParameters)) : {};
-        const { language, tmdbApiKey } = config; // Extraction de tmdbApiKey
+        const { language, tmdbApiKey } = config;
 
-        log.debug(`Received request for manifest with language: ${language}`);
+        log.debug(`Manifest request for language: ${language}`);
 
         if (language) {
             const genresExist = await checkGenresExistForLanguage(language);
-            log.debug(`Genres exist for language ${language}: ${genresExist}`);
+            log.debug(`Genres for language ${language}: ${genresExist ? 'Exist' : 'Fetching'}`);
 
             if (!genresExist) {
-                log.debug(`Fetching genres for language: ${language}`);
-                // Passer la clé API à la fonction fetchAndStoreGenres
-                await fetchAndStoreGenres(language, tmdbApiKey); // Attendez la fin du fetch et du stockage
-                log.debug(`Genres fetched and stored for language: ${language}`);
-            } else {
-                log.debug(`Genres already fetched for language: ${language}`);
+                await fetchAndStoreGenres(language, tmdbApiKey);
+                log.debug(`Genres fetched for language: ${language}`);
             }
-        } else {
-            log.debug(`No language specified in request, skipping genre check.`);
         }
 
-        // Génération du manifest après que le fetch des genres soit terminé
         const manifest = await generateManifest(language);
         res.json(manifest);
     } catch (error) {
-        log.error('Error generating manifest:', error.message);
+        log.error(`Error generating manifest: ${error.message}`);
         res.status(500).json({ error: 'Error generating manifest' });
     }
 });
@@ -67,14 +57,10 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
     const config = configParameters ? JSON.parse(decodeURIComponent(configParameters)) : {};
     const { language, hideNoPoster, tmdbApiKey } = config;
 
-    log.info(`Received catalog request with type: ${type}, id: ${id}, language: ${language}`);
-    log.info(`Received extra parameters: ${JSON.stringify(extraParams)}`);
-    log.info(`Cache duration set to: ${cacheDuration}`);
+    log.info(`Catalog request: type=${type}, id=${id}, language=${language}`);
+    log.debug(`Extra parameters: ${JSON.stringify(extraParams)}`);
 
-    let mediaType = type;
-    if (mediaType === 'series') {
-        mediaType = 'tv';
-    }
+    let mediaType = type === 'series' ? 'tv' : type;
 
     if (!['movie', 'tv'].includes(mediaType)) {
         log.error(`Invalid catalog type: ${mediaType}`);
@@ -84,8 +70,6 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
     try {
         if (extra) {
             const decodedExtra = decodeURIComponent(extra);
-
-            // Utiliser une expression régulière pour ne pas diviser si le & est entouré d'espaces
             const extraParamsFromUrl = decodedExtra.split(/(?<!\s)&(?!\s)/).reduce((acc, param) => {
                 const [key, value] = param.split('=');
                 if (key && value) {
@@ -96,29 +80,22 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
             extraParams = { ...extraParams, ...extraParamsFromUrl };
         }
 
-        if (language) {
-            extraParams.language = language;
-        }
-
-        if (typeof hideNoPoster !== 'undefined') {
-            extraParams.hideNoPoster = hideNoPoster.toString();
-        }
+        if (language) extraParams.language = language;
+        if (typeof hideNoPoster !== 'undefined') extraParams.hideNoPoster = hideNoPoster.toString();
 
         if (extraParams.genre) {
             const genreId = await getGenreId(mediaType, extraParams.genre);
             if (genreId) {
                 extraParams.with_genres = genreId;
             } else {
-                log.warn(`Genre ${extraParams.genre} not found for type ${mediaType}`);
+                log.warn(`Genre ${extraParams.genre} not found for ${mediaType}`);
             }
         }
 
         const metas = await fetchData(mediaType, id, extraParams, cacheDuration, tmdbApiKey);
+        log.info(`Fetched ${metas.length} items from TMDB`);
 
-        log.info(`Fetched ${metas.length} items from TMDB for type: ${mediaType}, id: ${id}`);
-
-        const shouldHideNoPoster = extraParams.hideNoPoster === 'true';
-        const filteredMetas = shouldHideNoPoster ? metas.filter(meta => meta.poster !== null) : metas;
+        const filteredMetas = extraParams.hideNoPoster === 'true' ? metas.filter(meta => meta.poster) : metas;
 
         res.json({ metas: filteredMetas });
     } catch (error) {

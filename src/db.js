@@ -7,22 +7,22 @@ const dbDir = path.join(__dirname, '../db');
 
 if (!fs.existsSync(dbDir)) {
     fs.mkdirSync(dbDir, { recursive: true });
-    log.debug('Created db directory');
+    log.debug('Database directory created');
 }
 
 const genresDb = new sqlite3.Database(path.join(dbDir, 'genres.db'), (err) => {
     if (err) {
-        log.error('Failed to connect to genres.db:', err);
+        log.error(`Failed to connect to genres.db: ${err.message}`);
     } else {
-        log.debug('Connected to genres.db successfully');
+        log.debug('Connected to genres.db');
     }
 });
 
 const cacheDb = new sqlite3.Database(path.join(dbDir, 'cache.db'), (err) => {
     if (err) {
-        log.error('Failed to connect to cache.db:', err);
+        log.error(`Failed to connect to cache.db: ${err.message}`);
     } else {
-        log.debug('Connected to cache.db successfully');
+        log.debug('Connected to cache.db');
     }
 });
 
@@ -36,9 +36,9 @@ genresDb.serialize(() => {
         UNIQUE (genre_id, media_type, language)
     )`, (err) => {
         if (err) {
-            log.error('Error creating genres table:', err);
+            log.error(`Error creating genres table: ${err.message}`);
         } else {
-            log.debug('Genres table created or already exists');
+            log.debug('Genres table is ready');
         }
     });
 });
@@ -52,9 +52,9 @@ cacheDb.serialize(() => {
         skip INTEGER
     )`, (err) => {
         if (err) {
-            log.error('Error creating cache table:', err);
+            log.error(`Error creating cache table: ${err.message}`);
         } else {
-            log.debug('Cache table created or already exists');
+            log.debug('Cache table is ready');
         }
     });
 });

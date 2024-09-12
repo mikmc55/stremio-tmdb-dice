@@ -46,26 +46,24 @@ const getCache = (key, cacheDuration = '3d') => {
             [key],
             (err, row) => {
                 if (err) {
-                    log.error('Error getting cache:', err);
+                    log.error(`Error retrieving cache for key ${key}: ${err.message}`);
                     reject(err);
-                } else {
-                    if (row) {
-                        const isCacheValid = (Date.now() / 1000 - row.timestamp) < cacheDurationInSeconds;
-                        if (isCacheValid) {
-                            log.debug('Cache hit');
-                            resolve({
-                                value: JSON.parse(row.value),
-                                page: row.page,
-                                skip: row.skip
-                            });
-                        } else {
-                            log.debug('Cache expired');
-                            resolve(null);
-                        }
+                } else if (row) {
+                    const isCacheValid = (Date.now() / 1000 - row.timestamp) < cacheDurationInSeconds;
+                    if (isCacheValid) {
+                        log.debug(`Cache hit for key ${key}`);
+                        resolve({
+                            value: JSON.parse(row.value),
+                            page: row.page,
+                            skip: row.skip
+                        });
                     } else {
-                        log.debug('Cache miss');
+                        log.debug(`Cache expired for key ${key}`);
                         resolve(null);
                     }
+                } else {
+                    log.debug(`Cache miss for key ${key}`);
+                    resolve(null);
                 }
             }
         );

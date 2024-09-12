@@ -15,5 +15,5 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/', routes);
 
 app.listen(PORT, () => {
-    log.info(`Express server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode.`);
+    log.info(`Server running on port ${PORT} - Environment: ${process.env.NODE_ENV || 'development'}`);
 });
