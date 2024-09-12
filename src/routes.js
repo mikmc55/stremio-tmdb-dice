@@ -66,14 +66,20 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
 
     // Extraction du paramètre de configuration
     const config = configParameters ? JSON.parse(decodeURIComponent(configParameters)) : {};
-    const { language, hideNoPoster, tmdbApiKey } = config; // Extraction de tmdbApiKey
+    const { language, hideNoPoster, tmdbApiKey } = config;
 
     log.info(`Received catalog request with type: ${type}, id: ${id}, language: ${language}`);
     log.info(`Received extra parameters: ${JSON.stringify(extraParams)}`);
     log.info(`Cache duration set to: ${cacheDuration}`);
 
-    if (!['movie', 'series'].includes(type)) {
-        log.error(`Invalid catalog type: ${type}`);
+    // Correction du type de contenu 'series' en 'tv'
+    let mediaType = type;
+    if (mediaType === 'series') {
+        mediaType = 'tv'; // TMDB utilise 'tv' pour les séries
+    }
+
+    if (!['movie', 'tv'].includes(mediaType)) {
+        log.error(`Invalid catalog type: ${mediaType}`);
         return res.status(400).json({ metas: [] });
     }
 
@@ -100,17 +106,17 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
         }
 
         if (extraParams.genre) {
-            const genreId = await getGenreId(type, extraParams.genre);
+            const genreId = await getGenreId(mediaType, extraParams.genre);
             if (genreId) {
                 extraParams.with_genres = genreId;
             } else {
-                log.warn(`Genre ${extraParams.genre} not found for type ${type}`);
+                log.warn(`Genre ${extraParams.genre} not found for type ${mediaType}`);
             }
         }
 
-        const metas = await fetchData(type, id, extraParams, cacheDuration, tmdbApiKey);
+        const metas = await fetchData(mediaType, id, extraParams, cacheDuration, tmdbApiKey);
 
-        log.info(`Fetched ${metas.length} items from TMDB for type: ${type}, id: ${id}`);
+        log.info(`Fetched ${metas.length} items from TMDB for type: ${mediaType}, id: ${id}`);
 
         // Filtrage des contenus sans poster si hideNoPoster est défini sur 'true'
         const shouldHideNoPoster = extraParams.hideNoPoster === 'true'; // Comparaison correcte

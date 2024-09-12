@@ -7,11 +7,11 @@ const queue = require('./ratelimit');
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 
-const getGenreId = (type, genreName) => {
+const getGenreId = (mediaType, genreName) => {
     return new Promise((resolve, reject) => {
         const query = `SELECT genre_id FROM genres WHERE media_type = ? AND genre_name = ?`;
 
-        genresDb.get(query, [type, genreName], (err, row) => {
+        genresDb.get(query, [mediaType, genreName], (err, row) => {
             if (err) {
                 reject(err);
             } else {
