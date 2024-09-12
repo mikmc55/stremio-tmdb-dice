@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const FANART_API_KEY = 'cd562ff8b802bb81bc05ec2122ec9846';
+const FANART_API_KEY = process.env.FANART_API_KEY;
 
 const getBestFanartPoster = async (tmdbId, preferredLang) => {
     try {

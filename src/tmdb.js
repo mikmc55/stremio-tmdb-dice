@@ -46,7 +46,7 @@ const getGenreId = (mediaType, genreName) =>
         return queryParams.join('&');
     };
     
-    const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMDB_API_KEY) => {
+    const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = process.env.TMDB_API_KEY, fanartApiKey = process.env.FANART_API_KEY) => { // Utilisez les variables d'environnement par défaut
         try {
             const mediaType = type === 'series' ? 'tv' : type;
             const language = extra.language || 'default';
@@ -111,9 +111,7 @@ const getGenreId = (mediaType, genreName) =>
                                 console.warn(`No genre IDs for item ${item.id}`);
                             }
     
-                            console.log(`Fetching best logo for item ${item.id}`);
-                            const logo = await getBestFanartPoster(item.id, language);
-                            console.log(`Logo URL for item ${item.id}: ${logo}`);
+                            const logo = fanartApiKey ? await getBestFanartPoster(item.id, language, fanartApiKey) : null; // Passez la clé API Fanart
     
                             return {
                                 id: item.id.toString(),
@@ -129,7 +127,6 @@ const getGenreId = (mediaType, genreName) =>
                             };
                         }));
     
-                        console.log(`Metas prepared for caching: ${JSON.stringify(metas.map(meta => ({ id: meta.id, name: meta.name })))}`);
                         setCatalogCache(cacheKey, metas, cacheDuration, randomPage, skip, genre, year, rating, mediaType);
                         resolve(metas);
                     }).catch(error => {
@@ -166,7 +163,6 @@ const getGenreId = (mediaType, genreName) =>
         });
     };
     
-
 const getGenreNames = (genreIds, mediaType, language) => 
     new Promise((resolve, reject) => {
         if (!genreIds || genreIds.length === 0) {

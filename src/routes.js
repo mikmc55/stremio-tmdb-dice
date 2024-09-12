@@ -47,7 +47,7 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
     const { configParameters, type, id, extra } = req.params;
     const { cacheDuration = '3d', ...query } = req.query;
     const config = configParameters ? JSON.parse(decodeURIComponent(configParameters)) : {};
-    const { language, hideNoPoster, tmdbApiKey } = config;
+    const { language, hideNoPoster, tmdbApiKey, fanartApiKey } = config; // Ajoutez fanartApiKey
 
     log.info(`Catalog request: type=${type}, id=${id}, language=${language}`);
     log.debug(`Extra parameters: ${JSON.stringify(query)}`);
@@ -87,7 +87,7 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
         }
 
         log.debug(`Extra parameters after processing: ${JSON.stringify(extraParams)}`);
-        const metas = await fetchData(mediaType, id, extraParams, cacheDuration, tmdbApiKey);
+        const metas = await fetchData(mediaType, id, extraParams, cacheDuration, tmdbApiKey, fanartApiKey); // Passez fanartApiKey
         log.info(`Fetched ${metas.length} items from TMDB`);
 
         res.json({
