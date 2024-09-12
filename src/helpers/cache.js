@@ -1,5 +1,9 @@
+const fs = require('fs');
+const path = require('path');
+const axios = require('axios');
 const { cacheDb } = require('./db');
 const log = require('./logger');
+const baseUrl = process.env.BASE_URL || 'http://localhost:7000';
 
 const cacheDurationToSeconds = (duration) => {
     const match = duration.match(/^(\d+)([dh])$/);
@@ -75,7 +79,47 @@ const getCatalogCache = (key, cacheDuration = '3d') => {
     });
 };
 
+const posterDirectory = path.join(__dirname, '../../db/rpdbPosters');
+
+if (!fs.existsSync(posterDirectory)) {
+    fs.mkdirSync(posterDirectory, { recursive: true });
+}
+
+const formatFileName = (posterId) => {
+    return posterId.replace(/[^a-zA-Z0-9-_]/g, '_');
+};
+
+const getCachedPoster = async (posterId) => {
+    const formattedPosterId = formatFileName(posterId);
+    const filePath = path.join(posterDirectory, `${formattedPosterId}.jpg`);
+
+    if (fs.existsSync(filePath)) {
+        const posterUrl = `${baseUrl}/poster/${formattedPosterId}.jpg`;
+        log.debug(`Cache hit for poster id ${posterId}, serving from ${posterUrl}`);
+        return { poster_url: posterUrl };
+    } else {
+        log.debug(`Cache miss for poster id ${posterId}`);
+        return null;
+    }
+};
+
+const setCachedPoster = async (posterId, posterUrl) => {
+    const formattedPosterId = formatFileName(posterId);
+    const filePath = path.join(posterDirectory, `${formattedPosterId}.jpg`);
+
+    try {
+        const response = await axios.get(posterUrl, { responseType: 'arraybuffer' });
+        fs.writeFileSync(filePath, response.data);
+        log.debug(`Poster id ${posterId} cached at ${filePath}`);
+    } catch (error) {
+        log.error(`Error caching poster id ${posterId} from URL ${posterUrl}: ${error.message}`);
+        throw error;
+    }
+};
+
 module.exports = {
     setCatalogCache,
-    getCatalogCache
+    getCatalogCache,
+    setCachedPoster,
+    getCachedPoster
 };

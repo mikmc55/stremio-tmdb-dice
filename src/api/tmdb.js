@@ -4,6 +4,7 @@ const { genresDb, cacheDb } = require('../helpers/db');
 const { getCatalogCache, setCatalogCache } = require('../helpers/cache');
 const queue = require('../helpers/ratelimit');
 const { getFanartPoster } = require('./fanart');
+const { getPosterUrl, cachePosters } = require('./rpdb');
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
@@ -17,7 +18,6 @@ const getGenreId = (mediaType, genreName) =>
         });
     });
 
-   
 const buildQueryParams = (params) => {
     const queryParams = [];
 
@@ -46,7 +46,7 @@ const buildQueryParams = (params) => {
     return queryParams.join('&');
 };
 
-const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = process.env.TMDB_API_KEY, fanartApiKey) => { // Utilisez les variables d'environnement par défaut
+const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = process.env.TMDB_API_KEY, rpdbApiKey, fanartApiKey) => { // Utilisez les variables d'environnement par défaut
     try {
         const mediaType = type === 'series' ? 'tv' : type;
         const language = extra.language || 'default';
@@ -106,49 +106,56 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = pro
 
         return new Promise((resolve, reject) => {
             queue.push({
-                fn: () => axios.get(url).then(async response => {
-                    const results = response.data.results;
-                    console.log(`Fetched ${results.length} results from TMDB on page ${randomPage}`);
+                fn: async () => {
+                    try {
+                        const response = await axios.get(url);
+                        const results = response.data.results;
+                        console.log(`Fetched ${results.length} results from TMDB on page ${randomPage}`);
 
-                    const metas = await Promise.all(results.map(async item => {
-                        const genreNames = item.genre_ids && item.genre_ids.length > 0 ?
-                            await getGenreNames(item.genre_ids, mediaType, language) :
-                            [];
+                        const metas = await Promise.all(results.map(async item => {
+                            const genreNames = item.genre_ids && item.genre_ids.length > 0 ?
+                                await getGenreNames(item.genre_ids, mediaType, language) :
+                                [];
+                        
+                            if (item.genre_ids && item.genre_ids.length === 0) {
+                                console.warn(`No genre IDs for item ${item.id}`);
+                            }
+                        
+                            let logo = null;
+                            if (!fanartApiKey) {
+                                fanartApiKey = process.env.FANART_API_KEY || '';
+                            }
+                        
+                            if (fanartApiKey) {
+                                logo = await getFanartPoster(item.id, language, fanartApiKey);
+                            }
+                        
+                            const posterUrl = await getPosterUrl(item, rpdbApiKey);
+                            console.log(`Poster URL for item ${item.id}: ${posterUrl}`);
+                        
+                            return {
+                                id: item.id.toString(),
+                                name: item.title || item.name,
+                                poster: posterUrl,
+                                banner: item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : null,
+                                logo: logo || null,
+                                type: mediaType,
+                                description: item.overview,
+                                releaseInfo: item.release_date || item.first_air_date,
+                                imdbRating: item.vote_average ? item.vote_average.toFixed(1) : null,
+                                genres: genreNames
+                            };
+                        }));
+                        
 
-                        if (item.genre_ids && item.genre_ids.length === 0) {
-                            console.warn(`No genre IDs for item ${item.id}`);
-                        }
-
-                        let logo = null;
-
-                        if (!fanartApiKey) {
-                            fanartApiKey = process.env.FANART_API_KEY || '';
-                        }
-
-                        if (fanartApiKey) {
-                            logo = await getFanartPoster(item.id, language, fanartApiKey);
-                        }
-
-                        return {
-                            id: item.id.toString(),
-                            name: item.title || item.name,
-                            poster: item.poster_path ? `https://image.tmdb.org/t/p/w600_and_h900_bestv2${item.poster_path}` : null,
-                            banner: item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : null,
-                            logo: logo || null,
-                            type: mediaType,
-                            description: item.overview,
-                            releaseInfo: item.release_date || item.first_air_date,
-                            imdbRating: item.vote_average ? item.vote_average.toFixed(1) : null,
-                            genres: genreNames
-                        };
-                    }));
-
-                    setCatalogCache(cacheKey, metas, cacheDuration, randomPage, skip, genre, year, rating, mediaType);
-                    resolve(metas);
-                }).catch(error => {
-                    console.error(`TMDB fetch error: ${error.message}`);
-                    reject(new Error('Failed to fetch data from TMDB'));
-                })
+                        setCatalogCache(cacheKey, metas, cacheDuration, randomPage, skip, genre, year, rating, mediaType);
+                        await cachePosters();
+                        resolve(metas);
+                    } catch (error) {
+                        console.error(`TMDB fetch error: ${error.message}`);
+                        reject(new Error('Failed to fetch data from TMDB'));
+                    }
+                }
             });
         });
     } catch (error) {
