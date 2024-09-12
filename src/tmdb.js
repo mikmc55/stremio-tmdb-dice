@@ -2,7 +2,7 @@ const axios = require('axios');
 const log = require('./logger');
 const { genresDb, cacheDb } = require('./db');
 const { getCache, setCache } = require('./cache');
-const queue = require('./queue');
+const queue = require('./ratelimit');
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
