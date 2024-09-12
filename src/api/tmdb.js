@@ -18,158 +18,166 @@ const getGenreId = (mediaType, genreName) =>
     });
 
    
-    const buildQueryParams = (params) => {
-        const queryParams = [];
-    
-        if (params.year) {
-            const [startYear, endYear] = params.year.split('-');
-            if (startYear && endYear) {
-                queryParams.push(`primary_release_date.gte=${startYear}-01-01`);
-                queryParams.push(`primary_release_date.lte=${endYear}-12-31`);
-            }
-        }
-    
-        if (params.rating) {
-            const [minRating, maxRating] = params.rating.split('-');
-            if (minRating && maxRating) {
-                queryParams.push(`vote_average.gte=${minRating}`);
-                queryParams.push(`vote_average.lte=${maxRating}`);
-            }
-        }
-    
-        Object.entries(params).forEach(([key, value]) => {
-            if (value !== undefined && value !== null && !['year', 'rating', 'hideNoPoster', 'skip', 'genre'].includes(key)) {
-                queryParams.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
-            }
-        });
-    
-        return queryParams.join('&');
-    };
-    
-    const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = process.env.TMDB_API_KEY, fanartApiKey) => { // Utilisez les variables d'environnement par défaut
-        try {
-            const mediaType = type === 'series' ? 'tv' : type;
-            const language = extra.language || 'default';
-            const genre = extra.genre || null;
-            const year = extra.year || null;
-            const rating = extra.rating || null;
-            const skip = extra.skip || 0;
-    
-            const cacheKey = `catalog_${mediaType}_${id}_${JSON.stringify(extra)}_lang_${language}_genre_${genre}_year_${year}_rating_${rating}`;
-            console.log(`Cache key generated: ${cacheKey}`);
-    
-            const cachedData = await getCatalogCache(cacheKey, cacheDuration);
-            if (cachedData) {
-                console.log(`Using cached data for key: ${cacheKey}`);
-                return cachedData.value;
-            }
-    
-            console.log(`Skip value: ${skip}`);
-    
-            const initialQueryParams = buildQueryParams({ ...extra, page: 1 });
-            const initialUrl = `${TMDB_BASE_URL}/discover/${mediaType}?api_key=${tmdbApiKey}&${initialQueryParams}`;
-            console.log(`Fetching initial data from TMDB to get total_pages: ${initialUrl}`);
-    
-            const initialResponse = await axios.get(initialUrl);
-            let total_pages = initialResponse.data.total_pages;
-            console.log(`Total pages available: ${total_pages}`);
-    
-            if (total_pages > 500) {
-                total_pages = 500;
-                console.log(`Capping total pages at 500`);
-            }
-    
-            const fetchedPages = await getFetchedPages(genre, year, rating, mediaType, cacheDb);
-            console.log(`Fetched pages: ${fetchedPages}`);
-    
-            let availablePages = Array.from({ length: total_pages }, (_, i) => i + 1).filter(page => !fetchedPages.includes(page));
-    
-            if (availablePages.length === 0) {
-                console.warn(`All pages have been fetched for the current filters.`);
-                return [];
-            }
-    
-            const randomPage = availablePages[Math.floor(Math.random() * availablePages.length)];
-            console.log(`Random page selected: ${randomPage}`);
-    
-            const queryParams = buildQueryParams({ ...extra, page: randomPage });
-            const url = `${TMDB_BASE_URL}/discover/${mediaType}?api_key=${tmdbApiKey}&${queryParams}`;
-            console.log(`Fetching from TMDB: ${url}`);
-    
-            return new Promise((resolve, reject) => {
-                queue.push({
-                    fn: () => axios.get(url).then(async response => {
-                        const results = response.data.results;
-                        console.log(`Fetched ${results.length} results from TMDB on page ${randomPage}`);
-    
-                        const metas = await Promise.all(results.map(async item => {
-                            const genreNames = item.genre_ids && item.genre_ids.length > 0 
-                                ? await getGenreNames(item.genre_ids, mediaType, language)
-                                : [];
-    
-                            if (item.genre_ids && item.genre_ids.length === 0) {
-                                console.warn(`No genre IDs for item ${item.id}`);
-                            }
-    
-                            let logo = null;
+const buildQueryParams = (params) => {
+    const queryParams = [];
 
-                            if (!fanartApiKey) {
-                                fanartApiKey = process.env.FANART_API_KEY || '';
-                            }
-                            
-                            if (fanartApiKey) {
-                                logo = await getFanartPoster(item.id, language, fanartApiKey);
-                            }
-    
-                            return {
-                                id: item.id.toString(),
-                                name: item.title || item.name,
-                                poster: item.poster_path ? `https://image.tmdb.org/t/p/w600_and_h900_bestv2${item.poster_path}` : null,
-                                banner: item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : null,
-                                logo: logo || null,
-                                type: mediaType,
-                                description: item.overview,
-                                releaseInfo: item.release_date || item.first_air_date,
-                                imdbRating: item.vote_average ? item.vote_average.toFixed(1) : null,
-                                genres: genreNames
-                            };
-                        }));
-    
-                        setCatalogCache(cacheKey, metas, cacheDuration, randomPage, skip, genre, year, rating, mediaType);
-                        resolve(metas);
-                    }).catch(error => {
-                        console.error(`TMDB fetch error: ${error.message}`);
-                        reject(new Error('Failed to fetch data from TMDB'));
-                    })
-                });
-            });
-        } catch (error) {
-            console.error(`Error in fetchData: ${error.message}`);
-            throw error;
+    if (params.year) {
+        const [startYear, endYear] = params.year.split('-');
+        if (startYear && endYear) {
+            queryParams.push(`primary_release_date.gte=${startYear}-01-01`);
+            queryParams.push(`primary_release_date.lte=${endYear}-12-31`);
         }
-    };
-    
-    const getFetchedPages = (genre, year, rating, mediaType, cacheDb) => {
-        return new Promise((resolve, reject) => {
-            const decodedGenre = decodeURIComponent(genre || 'undefined');
-            const decodedYear = decodeURIComponent(year || 'undefined');
-            const decodedRating = decodeURIComponent(rating || 'undefined');
-    
-            cacheDb.all(
-                `SELECT page FROM cache WHERE genre = ? AND year = ? AND rating = ? AND mediaType = ?`,
-                [decodedGenre, decodedYear, decodedRating, mediaType],
-                (err, rows) => {
-                    if (err) {
-                        log.error(`Error querying cache for fetched pages: ${err.message}`);
-                        reject(err);
-                    } else {
-                        const fetchedPages = rows.map(row => row.page);
-                        resolve(fetchedPages);
-                    }
-                }
-            );
+    }
+
+    if (params.rating) {
+        const [minRating, maxRating] = params.rating.split('-');
+        if (minRating && maxRating) {
+            queryParams.push(`vote_average.gte=${minRating}`);
+            queryParams.push(`vote_average.lte=${maxRating}`);
+        }
+    }
+
+    Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && !['year', 'rating', 'hideNoPoster', 'skip', 'genre'].includes(key)) {
+            queryParams.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+        }
+    });
+
+    return queryParams.join('&');
+};
+
+const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = process.env.TMDB_API_KEY, fanartApiKey) => { // Utilisez les variables d'environnement par défaut
+    try {
+        const mediaType = type === 'series' ? 'tv' : type;
+        const language = extra.language || 'default';
+        const genre = extra.genre || null;
+        const year = extra.year || null;
+        const rating = extra.rating || null;
+        const skip = extra.skip || 0;
+
+        const cacheKey = `catalog_${mediaType}_${id}_${JSON.stringify(extra)}_lang_${language}_genre_${genre}_year_${year}_rating_${rating}`;
+        console.log(`Cache key generated: ${cacheKey}`);
+
+        const cachedData = await getCatalogCache(cacheKey, cacheDuration);
+        if (cachedData) {
+            console.log(`Using cached data for key: ${cacheKey}`);
+            return cachedData.value;
+        }
+
+        console.log(`Skip value: ${skip}`);
+
+        const initialQueryParams = buildQueryParams({
+            ...extra,
+            page: 1
         });
-    };
+        const initialUrl = `${TMDB_BASE_URL}/discover/${mediaType}?api_key=${tmdbApiKey}&${initialQueryParams}`;
+        console.log(`Fetching initial data from TMDB to get total_pages: ${initialUrl}`);
+
+        const initialResponse = await axios.get(initialUrl);
+        let total_pages = initialResponse.data.total_pages;
+        console.log(`Total pages available: ${total_pages}`);
+
+        if (total_pages > 500) {
+            total_pages = 500;
+            console.log(`Capping total pages at 500`);
+        }
+
+        const fetchedPages = await getFetchedPages(genre, year, rating, mediaType, cacheDb);
+        console.log(`Fetched pages: ${fetchedPages}`);
+
+        let availablePages = Array.from({
+            length: total_pages
+        }, (_, i) => i + 1).filter(page => !fetchedPages.includes(page));
+
+        if (availablePages.length === 0) {
+            console.warn(`All pages have been fetched for the current filters.`);
+            return [];
+        }
+
+        const randomPage = availablePages[Math.floor(Math.random() * availablePages.length)];
+        console.log(`Random page selected: ${randomPage}`);
+
+        const queryParams = buildQueryParams({
+            ...extra,
+            page: randomPage
+        });
+        const url = `${TMDB_BASE_URL}/discover/${mediaType}?api_key=${tmdbApiKey}&${queryParams}`;
+        console.log(`Fetching from TMDB: ${url}`);
+
+        return new Promise((resolve, reject) => {
+            queue.push({
+                fn: () => axios.get(url).then(async response => {
+                    const results = response.data.results;
+                    console.log(`Fetched ${results.length} results from TMDB on page ${randomPage}`);
+
+                    const metas = await Promise.all(results.map(async item => {
+                        const genreNames = item.genre_ids && item.genre_ids.length > 0 ?
+                            await getGenreNames(item.genre_ids, mediaType, language) :
+                            [];
+
+                        if (item.genre_ids && item.genre_ids.length === 0) {
+                            console.warn(`No genre IDs for item ${item.id}`);
+                        }
+
+                        let logo = null;
+
+                        if (!fanartApiKey) {
+                            fanartApiKey = process.env.FANART_API_KEY || '';
+                        }
+
+                        if (fanartApiKey) {
+                            logo = await getFanartPoster(item.id, language, fanartApiKey);
+                        }
+
+                        return {
+                            id: item.id.toString(),
+                            name: item.title || item.name,
+                            poster: item.poster_path ? `https://image.tmdb.org/t/p/w600_and_h900_bestv2${item.poster_path}` : null,
+                            banner: item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : null,
+                            logo: logo || null,
+                            type: mediaType,
+                            description: item.overview,
+                            releaseInfo: item.release_date || item.first_air_date,
+                            imdbRating: item.vote_average ? item.vote_average.toFixed(1) : null,
+                            genres: genreNames
+                        };
+                    }));
+
+                    setCatalogCache(cacheKey, metas, cacheDuration, randomPage, skip, genre, year, rating, mediaType);
+                    resolve(metas);
+                }).catch(error => {
+                    console.error(`TMDB fetch error: ${error.message}`);
+                    reject(new Error('Failed to fetch data from TMDB'));
+                })
+            });
+        });
+    } catch (error) {
+        console.error(`Error in fetchData: ${error.message}`);
+        throw error;
+    }
+};
+
+const getFetchedPages = (genre, year, rating, mediaType, cacheDb) => {
+    return new Promise((resolve, reject) => {
+        const decodedGenre = decodeURIComponent(genre || 'undefined');
+        const decodedYear = decodeURIComponent(year || 'undefined');
+        const decodedRating = decodeURIComponent(rating || 'undefined');
+
+        cacheDb.all(
+            `SELECT page FROM cache WHERE genre = ? AND year = ? AND rating = ? AND mediaType = ?`,
+            [decodedGenre, decodedYear, decodedRating, mediaType],
+            (err, rows) => {
+                if (err) {
+                    log.error(`Error querying cache for fetched pages: ${err.message}`);
+                    reject(err);
+                } else {
+                    const fetchedPages = rows.map(row => row.page);
+                    resolve(fetchedPages);
+                }
+            }
+        );
+    });
+};
     
 const getGenreNames = (genreIds, mediaType, language) => 
     new Promise((resolve, reject) => {
