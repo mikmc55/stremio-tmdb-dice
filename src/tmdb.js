@@ -16,67 +16,6 @@ const getGenreId = (mediaType, genreName) =>
         });
     });
 
-const determinePageFromSkip = async (skip, genre, rating, year, mediaType, sort_by, cacheDb) => {
-    try {
-        const decodedSkip = decodeURIComponent(skip);
-        const decodedGenre = decodeURIComponent(genre || 'undefined');
-        const decodedRating = decodeURIComponent(rating || 'undefined');
-        const decodedYear = decodeURIComponent(year || 'undefined');
-        const decodedsort_by = decodeURIComponent(sort_by || 'undefined');
-
-        log.debug(`Determining page from skip: ${decodedSkip}, genre: ${decodedGenre}, rating: ${decodedRating}, year: ${decodedYear}, sort_by: ${decodedsort_by}, mediaType: ${mediaType}`);
-
-        const cachedEntry = await new Promise((resolve, reject) => {
-            cacheDb.get(
-                "SELECT page, skip FROM cache WHERE skip = ? AND genre = ? AND rating = ? AND year = ? AND sort_by = ? AND mediaType = ? LIMIT 1",
-                [decodedSkip, decodedGenre, decodedRating, decodedYear, decodedsort_by, mediaType],
-                (err, row) => {
-                    if (err) {
-                        log.error(`Error querying cache for skip ${decodedSkip} with genre ${decodedGenre}, rating ${decodedRating}, year ${decodedYear}, sort_by ${decodedsort_by}, mediaType ${mediaType}: ${err.message}`);
-                        reject(err);
-                    } else {
-                        resolve(row);
-                    }
-                }
-            );
-        });
-
-        if (cachedEntry) {
-            log.debug(`Cached entry found: Page ${cachedEntry.page}, Skip ${cachedEntry.skip}`);
-            return cachedEntry.page;
-        }
-
-        const lastEntry = await new Promise((resolve, reject) => {
-            cacheDb.get(
-                "SELECT page, skip, genre, rating, year, sort_by FROM cache WHERE genre = ? AND rating = ? AND year = ? AND sort_by = ? AND mediaType = ? ORDER BY skip DESC LIMIT 1",
-                [decodedGenre, decodedRating, decodedYear, decodedsort_by, mediaType],
-                (err, row) => {
-                    if (err) {
-                        log.error(`Error querying last entry with genre ${decodedGenre}, rating ${decodedRating}, year ${decodedYear}, sort_by ${decodedsort_by}, mediaType ${mediaType}: ${err.message}`);
-                        reject(err);
-                    } else {
-                        resolve(row);
-                    }
-                }
-            );
-        });
-
-        if (lastEntry) {
-            log.debug(`Last entry found: Page ${lastEntry.page}, Skip ${lastEntry.skip}, Genre ${lastEntry.genre}, Rating ${lastEntry.rating}, Year ${lastEntry.year}, sort_by ${lastEntry.sort_by}`);
-            if (parseInt(decodedSkip, 10) > parseInt(lastEntry.skip, 10)) {
-                log.debug(`Skip ${decodedSkip} is greater than last entry skip ${lastEntry.skip}. Calculating new page.`);
-                return lastEntry.page + 1;
-            }
-        }
-
-        log.debug(`No cached entry or skip not greater than last entry. Returning page 1.`);
-        return 1;
-    } catch (error) {
-        log.error(`Error determining page from skip: ${error.message}`);
-        return 1;
-    }
-};
-
 const buildQueryParams = (params) => {
     const queryParams = [];
 
@@ -127,8 +66,8 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
         const genre = extra.genre || null;
         const year = extra.year || null;
         const rating = extra.rating || null;
-        const skip = extra.skip || 0;
         const sort_by = extra.sort_by ? convertsort_by(extra.sort_by) : null;
+        const skip = extra.skip || 0;
 
         const cacheKey = `catalog_${mediaType}_${id}_${JSON.stringify(extra)}_lang_${language}_genre_${genre}_year_${year}_rating_${rating}_sort_by_${sort_by}`;
         log.info(`Cache key generated: ${cacheKey}`);
@@ -140,11 +79,34 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
         }
 
         log.debug(`Skip value: ${skip}`);
-        const page = await determinePageFromSkip(skip, genre, rating, year, mediaType, sort_by, cacheDb);
 
-        log.debug(`Determined page: ${page}`);
+        const initialQueryParams = buildQueryParams({ ...extra, page: 1, sort_by });
+        const initialUrl = `${TMDB_BASE_URL}/discover/${mediaType}?api_key=${tmdbApiKey}&${initialQueryParams}`;
+        log.info(`Fetching initial data from TMDB to get total_pages: ${initialUrl}`);
 
-        const queryParams = buildQueryParams({ ...extra, page, sort_by });
+        const initialResponse = await axios.get(initialUrl);
+        let total_pages = initialResponse.data.total_pages;
+        log.debug(`Total pages available: ${total_pages}`);
+
+        if (total_pages > 500) {
+            total_pages = 500;
+            log.info(`Capping total pages at 500`);
+        }
+
+        const fetchedPages = await getFetchedPages(genre, year, rating, mediaType, sort_by, cacheDb);
+        log.debug(`Fetched pages: ${fetchedPages}`);
+
+        let availablePages = Array.from({ length: total_pages }, (_, i) => i + 1).filter(page => !fetchedPages.includes(page));
+        
+        if (availablePages.length === 0) {
+            log.warn(`All pages have been fetched for the current filters.`);
+            return [];
+        }
+
+        const randomPage = availablePages[Math.floor(Math.random() * availablePages.length)];
+        log.debug(`Random page selected: ${randomPage}`);
+
+        const queryParams = buildQueryParams({ ...extra, page: randomPage, sort_by });
         const url = `${TMDB_BASE_URL}/discover/${mediaType}?api_key=${tmdbApiKey}&${queryParams}`;
         log.info(`Fetching from TMDB: ${url}`);
 
@@ -152,7 +114,7 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
             queue.push({
                 fn: () => axios.get(url).then(async response => {
                     const results = response.data.results;
-                    log.info(`Fetched ${results.length} results from TMDB`);
+                    log.info(`Fetched ${results.length} results from TMDB on page ${randomPage}`);
 
                     const metas = await Promise.all(results.map(async item => {
                         const genreNames = item.genre_ids && item.genre_ids.length > 0 
@@ -177,7 +139,7 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
                     }));
 
                     log.debug(`Metas prepared for caching: ${JSON.stringify(metas.map(meta => ({ id: meta.id, name: meta.name })))}`);
-                    setCache(cacheKey, metas, cacheDuration, page, skip, genre, year, rating, mediaType, sort_by);
+                    setCache(cacheKey, metas, cacheDuration, randomPage, skip, genre, year, rating, mediaType, sort_by);
                     resolve(metas);
                 }).catch(error => {
                     log.error(`TMDB fetch error: ${error.message}`);
@@ -189,6 +151,29 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
         log.error(`Error in fetchData: ${error.message}`);
         throw error;
     }
+};
+
+const getFetchedPages = (genre, year, rating, mediaType, sort_by, cacheDb) => {
+    return new Promise((resolve, reject) => {
+        const decodedGenre = decodeURIComponent(genre || 'undefined');
+        const decodedYear = decodeURIComponent(year || 'undefined');
+        const decodedRating = decodeURIComponent(rating || 'undefined');
+        const decodedsort_by = decodeURIComponent(sort_by || 'undefined');
+
+        cacheDb.all(
+            `SELECT page FROM cache WHERE genre = ? AND year = ? AND rating = ? AND mediaType = ? AND sort_by = ?`,
+            [decodedGenre, decodedYear, decodedRating, mediaType, decodedsort_by],
+            (err, rows) => {
+                if (err) {
+                    log.error(`Error querying cache for fetched pages: ${err.message}`);
+                    reject(err);
+                } else {
+                    const fetchedPages = rows.map(row => row.page);
+                    resolve(fetchedPages);
+                }
+            }
+        );
+    });
 };
 
 const getGenreNames = (genreIds, mediaType, language) => 
