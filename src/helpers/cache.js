@@ -19,7 +19,10 @@ const cacheDurationToSeconds = (duration) => {
     }
 };
 
-const setCatalogCache = (key, value, duration = '3d', page = 1, skip = 0, genre = null, year = null, rating = null, mediaType = null) => {
+// Obtenir la durée du cache depuis les variables d'environnement ou utiliser une valeur par défaut
+const DEFAULT_CACHE_DURATION = process.env.CATALOG_CONTENT_CACHE_DURATION || '3d';
+
+const setCatalogCache = (key, value, duration = DEFAULT_CACHE_DURATION, page = 1, skip = 0, genre = null, year = null, rating = null, mediaType = null) => {
     try {
         genre = genre === null ? "undefined" : genre;
         year = year === null ? "undefined" : year;
@@ -41,7 +44,7 @@ const setCatalogCache = (key, value, duration = '3d', page = 1, skip = 0, genre 
     }
 };
 
-const getCatalogCache = (key, cacheDuration = '3d') => {
+const getCatalogCache = (key, cacheDuration = DEFAULT_CACHE_DURATION) => {
     const cacheDurationInSeconds = cacheDurationToSeconds(cacheDuration);
 
     return new Promise((resolve, reject) => {
