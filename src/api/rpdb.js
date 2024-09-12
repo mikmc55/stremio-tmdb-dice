@@ -5,7 +5,7 @@ const { setCachedPoster, getCachedPoster } = require('../helpers/cache');
 const getRpdbPoster = (type, id, language, rpdbkey) => {
     const tier = rpdbkey.split("-")[0];
     const lang = language.split("-")[0];
-    const baseUrl = `https://api.ratingposterdb.com/${rpdbkey}/tmdb/poster-default/${type}-${id}.jpg?fallback=true`;
+    const baseUrl = `https://api.ratingposterdb.com/${rpdbkey}/tmdb/poster-default/${type}-${id}.jpg`;
 
     return (tier === "t0" || tier === "t1")
         ? baseUrl
