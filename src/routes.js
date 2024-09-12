@@ -64,7 +64,6 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
     let extraParams = req.query;
     const cacheDuration = req.query.cacheDuration || '3d';
 
-    // Extraction du paramètre de configuration
     const config = configParameters ? JSON.parse(decodeURIComponent(configParameters)) : {};
     const { language, hideNoPoster, tmdbApiKey } = config;
 
@@ -72,10 +71,9 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
     log.info(`Received extra parameters: ${JSON.stringify(extraParams)}`);
     log.info(`Cache duration set to: ${cacheDuration}`);
 
-    // Correction du type de contenu 'series' en 'tv'
     let mediaType = type;
     if (mediaType === 'series') {
-        mediaType = 'tv'; // TMDB utilise 'tv' pour les séries
+        mediaType = 'tv';
     }
 
     if (!['movie', 'tv'].includes(mediaType)) {
@@ -86,23 +84,24 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
     try {
         if (extra) {
             const decodedExtra = decodeURIComponent(extra);
-            const extraParamsFromUrl = decodedExtra.split('&').reduce((acc, param) => {
+
+            // Utiliser une expression régulière pour ne pas diviser si le & est entouré d'espaces
+            const extraParamsFromUrl = decodedExtra.split(/(?<!\s)&(?!\s)/).reduce((acc, param) => {
                 const [key, value] = param.split('=');
                 if (key && value) {
-                    acc[key] = value;
+                    acc[decodeURIComponent(key.trim())] = decodeURIComponent(value.trim());
                 }
                 return acc;
             }, {});
             extraParams = { ...extraParams, ...extraParamsFromUrl };
         }
 
-        // Intégrer les paramètres de configuration dans extraParams
         if (language) {
             extraParams.language = language;
         }
 
         if (typeof hideNoPoster !== 'undefined') {
-            extraParams.hideNoPoster = hideNoPoster.toString(); // Convertir en chaîne pour comparaison
+            extraParams.hideNoPoster = hideNoPoster.toString();
         }
 
         if (extraParams.genre) {

@@ -141,7 +141,6 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
                         let genreNames = [];
                         if (item.genre_ids && item.genre_ids.length > 0) {
                             genreNames = await getGenreNames(item.genre_ids, mediaType, language);
-                            log.info(`Fetched genres for item ${item.id}: ${genreNames.join(', ')}`);
                         } else {
                             log.warn(`No genre IDs found for item ${item.id}`);
                         }
@@ -183,15 +182,12 @@ const getGenreNames = (genreIds, mediaType, language) => {
         const placeholders = genreIds.map(() => '?').join(',');
         const sql = `SELECT genre_name FROM genres WHERE genre_id IN (${placeholders}) AND media_type = ? AND language = ?`;
 
-        log.info(`Executing SQL to fetch genre names: ${sql}`);
-        
         genresDb.all(sql, [...genreIds, mediaType, language], (err, rows) => {
             if (err) {
                 log.error('Error fetching genre names from database:', err);
                 resolve([]); // Instead of rejecting, resolve with an empty array to avoid breaking fetchData
             } else {
                 const genreNames = rows.map(row => row.genre_name);
-                log.info(`Fetched genre names: ${genreNames.join(', ')}`);
                 resolve(genreNames);
             }
         });
