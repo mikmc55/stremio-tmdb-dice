@@ -4,7 +4,6 @@ const getCurrentYear = () => new Date().getFullYear();
 
 const generateYearIntervals = (startYear = 1880, endYear = getCurrentYear(), interval = 4) => {
     const intervals = [];
-
     endYear = Math.max(endYear, startYear);
 
     for (let year = endYear; year >= startYear; year -= interval) {
@@ -12,42 +11,36 @@ const generateYearIntervals = (startYear = 1880, endYear = getCurrentYear(), int
         intervals.push(`${nextYear}-${year}`);
     }
 
-    if (intervals.length > 0) {
-        const firstInterval = intervals[intervals.length - 1];
-        const [firstStart, firstEnd] = firstInterval.split('-').map(Number);
+    const [firstStart, firstEnd] = intervals.length 
+        ? intervals[intervals.length - 1].split('-').map(Number) 
+        : [startYear, endYear];
 
-        if (firstStart > startYear) {
-            intervals[intervals.length - 1] = `${startYear}-${firstEnd}`;
-        }
-    } else {
-        intervals.push(`${startYear}-${endYear}`);
+    if (firstStart > startYear) {
+        intervals[intervals.length - 1] = `${startYear}-${firstEnd}`;
     }
 
-    return intervals;
+    return intervals.length ? intervals : [`${startYear}-${endYear}`];
 };
 
-function getGenres(type, language) {
-    return new Promise((resolve, reject) => {
+const getGenres = (type, language) => 
+    new Promise((resolve, reject) => {
         const query = `SELECT genre_name FROM genres WHERE media_type = ? AND language = ?`;
         genresDb.all(query, [type, language], (err, rows) => {
-            if (err) {
-                reject(err);
-            } else {
-                const genres = rows.map(row => row.genre_name);
-                resolve(genres);
-            }
+            if (err) return reject(err);
+            resolve(rows.map(row => row.genre_name));
         });
     });
-}
 
-async function generateManifest(language) {
+const generateManifest = async (language) => {
     try {
-        const movieGenres = await getGenres('movie', language);
-        const seriesGenres = await getGenres('tv', language);
+        const [movieGenres, seriesGenres] = await Promise.all([
+            getGenres('movie', language),
+            getGenres('tv', language)
+        ]);
 
         const yearIntervals = generateYearIntervals();
 
-        const manifest = {
+        return {
             id: 'community.stremiotmdbdice',
             version: '1.0.0',
             logo: "https://i.imgur.com/jEPaX6R.png",
@@ -97,12 +90,9 @@ async function generateManifest(language) {
                 }
             ]
         };
-
-        return manifest;
-
     } catch (error) {
         console.error('Error generating manifest:', error);
     }
-}
+};
 
 module.exports = generateManifest;

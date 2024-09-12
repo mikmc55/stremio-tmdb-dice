@@ -7,66 +7,77 @@ const queue = require('./ratelimit');
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 
-const getGenreId = (mediaType, genreName) => {
-    return new Promise((resolve, reject) => {
+const getGenreId = (mediaType, genreName) => 
+    new Promise((resolve, reject) => {
         const query = `SELECT genre_id FROM genres WHERE media_type = ? AND genre_name = ?`;
-
         genresDb.get(query, [mediaType, genreName], (err, row) => {
-            if (err) {
-                reject(err);
-            } else {
-                resolve(row ? row.genre_id : null);
-            }
+            if (err) return reject(err);
+            resolve(row ? row.genre_id : null);
         });
     });
-};
 
-const determinePageFromSkip = async (skip, catalogDb) => {
-    try {
-        const cachedEntry = await new Promise((resolve, reject) => {
-            catalogDb.get(
-                "SELECT page, skip FROM cache WHERE skip = ? ORDER BY skip DESC LIMIT 1",
-                [skip],
-                (err, row) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        resolve(row);
+    const determinePageFromSkip = async (skip, genre, rating, year, cacheDb) => {
+        try {
+            // Décodage des paramètres pour gérer les caractères spéciaux
+            const decodedSkip = decodeURIComponent(skip);
+            const decodedGenre = decodeURIComponent(genre || '');
+            const decodedRating = decodeURIComponent(rating || '');
+            const decodedYear = decodeURIComponent(year || '');
+    
+            log.debug(`Determining page from skip: ${decodedSkip}, genre: ${decodedGenre}, rating: ${decodedRating}, year: ${decodedYear}`);
+    
+            // Requête pour trouver l'entrée en cache correspondant au skip avec les paramètres supplémentaires
+            const cachedEntry = await new Promise((resolve, reject) => {
+                cacheDb.get(
+                    "SELECT page, skip FROM cache WHERE skip = ? AND genre = ? AND rating = ? AND year = ? LIMIT 1",
+                    [decodedSkip, decodedGenre, decodedRating, decodedYear],
+                    (err, row) => {
+                        if (err) {
+                            log.error(`Error querying cache for skip ${decodedSkip} with genre ${decodedGenre}, rating ${decodedRating}, year ${decodedYear}: ${err.message}`);
+                            reject(err);
+                        } else {
+                            resolve(row);
+                        }
                     }
-                }
-            );
-        });
-
-        if (cachedEntry) {
-            log.debug(`Cached entry found: Page ${cachedEntry.page}`);
-            return cachedEntry.page;
-        }
-
-        const lastEntry = await new Promise((resolve, reject) => {
-            catalogDb.get(
-                "SELECT page, skip FROM cache ORDER BY skip DESC LIMIT 1",
-                (err, row) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        resolve(row);
-                    }
-                }
-            );
-        });
-
-        if (lastEntry) {
-            if (skip > lastEntry.skip) {
-                return lastEntry.page + 1;
+                );
+            });
+    
+            if (cachedEntry) {
+                log.debug(`Cached entry found: Page ${cachedEntry.page}, Skip ${cachedEntry.skip}`);
+                return cachedEntry.page;
             }
+    
+            // Requête pour trouver le dernier enregistrement dans le cache avec les paramètres supplémentaires
+            const lastEntry = await new Promise((resolve, reject) => {
+                cacheDb.get(
+                    "SELECT page, skip, genre, rating, year FROM cache WHERE genre = ? AND rating = ? AND year = ? ORDER BY skip DESC LIMIT 1",
+                    [decodedGenre, decodedRating, decodedYear],
+                    (err, row) => {
+                        if (err) {
+                            log.error(`Error querying last entry with genre ${decodedGenre}, rating ${decodedRating}, year ${decodedYear}: ${err.message}`);
+                            reject(err);
+                        } else {
+                            resolve(row);
+                        }
+                    }
+                );
+            });
+    
+            if (lastEntry) {
+                log.debug(`Last entry found: Page ${lastEntry.page}, Skip ${lastEntry.skip}, Genre ${lastEntry.genre}, Rating ${lastEntry.rating}, Year ${lastEntry.year}`);
+                if (parseInt(decodedSkip, 10) > parseInt(lastEntry.skip, 10)) {
+                    log.debug(`Skip ${decodedSkip} is greater than last entry skip ${lastEntry.skip}. Calculating new page.`);
+                    return lastEntry.page + 1;
+                }
+            }
+    
+            log.debug(`No cached entry or skip not greater than last entry. Returning page 1.`);
+            return 1;
+        } catch (error) {
+            log.error(`Error determining page from skip: ${error.message}`);
+            return 1;
         }
-
-        return 1;
-    } catch (error) {
-        log.error(`Error determining page from skip: ${error.message}`);
-        return 1;
-    }
-};
+    };
 
 const buildQueryParams = (params) => {
     const queryParams = [];
@@ -87,31 +98,40 @@ const buildQueryParams = (params) => {
         }
     }
 
-    for (const [key, value] of Object.entries(params)) {
+    Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null && !['year', 'rating', 'hideNoPoster', 'skip', 'genre'].includes(key)) {
             queryParams.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
         }
-    }
+    });
 
     return queryParams.join('&');
 };
 
 const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMDB_API_KEY) => {
     try {
-        const mediaType = type === 'series' ? 'tv' : type; 
+        const mediaType = type === 'series' ? 'tv' : type;
         const language = extra.language || 'default';
-        const cacheKey = `catalog_${mediaType}_${id}_${JSON.stringify(extra)}_lang_${language}`;
+        const genre = extra.genre || null;
+        const year = extra.year || null;
+        const rating = extra.rating || null;
+        const skip = extra.skip || 0;
 
+        // Création de la clé de cache incluant les nouveaux paramètres
+        const cacheKey = `catalog_${mediaType}_${id}_${JSON.stringify(extra)}_lang_${language}_genre_${genre}_year_${year}_rating_${rating}`;
         log.info(`Cache key generated: ${cacheKey}`);
 
+        // Récupération des données en cache
         const cachedData = await getCache(cacheKey, cacheDuration);
         if (cachedData) {
             log.info(`Using cached data for key: ${cacheKey}`);
             return cachedData.value;
         }
 
-        const skip = extra.skip || 0;
-        const page = await determinePageFromSkip(skip, cacheDb);
+        log.debug(`Skip value: ${skip}`);
+        const page = await determinePageFromSkip(skip, genre, rating, year, cacheDb);
+        log.debug(`Determined page: ${page}`);
+
+        // Construction des paramètres de requête pour TMDB
         const queryParams = buildQueryParams({ ...extra, page });
         const url = `${TMDB_BASE_URL}/discover/${mediaType}?api_key=${tmdbApiKey}&${queryParams}`;
         log.info(`Fetching from TMDB: ${url}`);
@@ -123,12 +143,14 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
                     log.info(`Fetched ${results.length} results from TMDB`);
 
                     const metas = await Promise.all(results.map(async item => {
-                        let genreNames = [];
-                        if (item.genre_ids && item.genre_ids.length > 0) {
-                            genreNames = await getGenreNames(item.genre_ids, mediaType, language);
-                        } else {
+                        const genreNames = item.genre_ids && item.genre_ids.length > 0 
+                            ? await getGenreNames(item.genre_ids, mediaType, language)
+                            : [];
+
+                        if (item.genre_ids && item.genre_ids.length === 0) {
                             log.warn(`No genre IDs for item ${item.id}`);
                         }
+
                         return {
                             id: item.id.toString(),
                             name: item.title || item.name,
@@ -142,7 +164,9 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
                         };
                     }));
 
-                    setCache(cacheKey, metas, cacheDuration, page, skip);
+                    log.debug(`Metas prepared for caching: ${JSON.stringify(metas.map(meta => ({ id: meta.id, name: meta.name })))}`);
+                    // Mise en cache des données
+                    setCache(cacheKey, metas, cacheDuration, page, skip, genre, year, rating);
                     resolve(metas);
                 }).catch(error => {
                     log.error(`TMDB fetch error: ${error.message}`);
@@ -156,8 +180,8 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = TMD
     }
 };
 
-const getGenreNames = (genreIds, mediaType, language) => {
-    return new Promise((resolve, reject) => {
+const getGenreNames = (genreIds, mediaType, language) => 
+    new Promise((resolve, reject) => {
         if (!genreIds || genreIds.length === 0) {
             log.warn(`No genre IDs provided for ${mediaType}`);
             return resolve([]);
@@ -175,7 +199,6 @@ const getGenreNames = (genreIds, mediaType, language) => {
             }
         });
     });
-};
 
 const fetchGenres = async (type, language, tmdbApiKey = TMDB_API_KEY) => {
     const mediaType = type === 'series' ? 'tv' : 'movie';
@@ -183,10 +206,7 @@ const fetchGenres = async (type, language, tmdbApiKey = TMDB_API_KEY) => {
 
     try {
         const response = await axios.get(`${TMDB_BASE_URL}${endpoint}`, {
-            params: {
-                api_key: tmdbApiKey,
-                language: language
-            }
+            params: { api_key: tmdbApiKey, language }
         });
         log.debug(`Genres retrieved for ${type} (${language})`);
         return response.data.genres;
@@ -196,20 +216,17 @@ const fetchGenres = async (type, language, tmdbApiKey = TMDB_API_KEY) => {
     }
 };
 
-const storeGenresInDb = (genres, mediaType, language) => {
-    return new Promise((resolve, reject) => {
+const storeGenresInDb = (genres, mediaType, language) => 
+    new Promise((resolve, reject) => {
         genresDb.serialize(() => {
             genresDb.run('BEGIN TRANSACTION');
-
             const insertGenre = genresDb.prepare(`
                 INSERT INTO genres (genre_id, genre_name, media_type, language)
                 VALUES (?, ?, ?, ?)
                 ON CONFLICT DO NOTHING;
             `);
 
-            let genresProcessed = 0;
-
-            genres.forEach((genre) => {
+            genres.forEach((genre, index) => {
                 insertGenre.run(genre.id, genre.name, mediaType, language, (err) => {
                     if (err) {
                         log.error(`Error inserting genre: ${err.message}`);
@@ -218,8 +235,7 @@ const storeGenresInDb = (genres, mediaType, language) => {
                         return;
                     }
 
-                    genresProcessed++;
-                    if (genresProcessed === genres.length) {
+                    if (index === genres.length - 1) {
                         insertGenre.finalize();
                         genresDb.run('COMMIT');
                         log.info(`Genres stored for ${mediaType} (${language})`);
@@ -229,25 +245,16 @@ const storeGenresInDb = (genres, mediaType, language) => {
             });
         });
     });
-};
 
-const checkGenresExistForLanguage = async (language) => {
-    return new Promise((resolve, reject) => {
+const checkGenresExistForLanguage = async (language) => 
+    new Promise((resolve, reject) => {
         log.debug(`Checking genres for ${language}`);
         genresDb.get(
             `SELECT 1 FROM genres WHERE language = ? LIMIT 1`,
             [language], 
-            (err, row) => {
-                if (err) {
-                    log.error(`Error checking genres for ${language}: ${err.message}`);
-                    reject(err);
-                } else {
-                    resolve(!!row);
-                }
-            }
+            (err, row) => err ? reject(err) : resolve(!!row)
         );
     });
-};
 
 const fetchAndStoreGenres = async (language, tmdbApiKey = TMDB_API_KEY) => {
     try {

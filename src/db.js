@@ -10,53 +10,60 @@ if (!fs.existsSync(dbDir)) {
     log.debug('Database directory created');
 }
 
-const genresDb = new sqlite3.Database(path.join(dbDir, 'genres.db'), (err) => {
-    if (err) {
-        log.error(`Failed to connect to genres.db: ${err.message}`);
-    } else {
-        log.debug('Connected to genres.db');
-    }
-});
-
-const cacheDb = new sqlite3.Database(path.join(dbDir, 'cache.db'), (err) => {
-    if (err) {
-        log.error(`Failed to connect to cache.db: ${err.message}`);
-    } else {
-        log.debug('Connected to cache.db');
-    }
-});
-
-genresDb.serialize(() => {
-    genresDb.run(`CREATE TABLE IF NOT EXISTS genres (
-        genre_id INTEGER,
-        genre_name TEXT,
-        media_type TEXT,
-        language TEXT,
-        PRIMARY KEY (genre_id, media_type, language),
-        UNIQUE (genre_id, media_type, language)
-    )`, (err) => {
+const createDatabase = (dbPath, dbName) => {
+    return new sqlite3.Database(dbPath, (err) => {
         if (err) {
-            log.error(`Error creating genres table: ${err.message}`);
+            log.error(`Failed to connect to ${dbName}: ${err.message}`);
         } else {
-            log.debug('Genres table is ready');
+            log.debug(`Connected to ${dbName}`);
         }
     });
+};
+
+const genresDb = createDatabase(path.join(dbDir, 'genres.db'), 'genres.db');
+const cacheDb = createDatabase(path.join(dbDir, 'cache.db'), 'cache.db');
+
+const createTable = (db, query, tableName) => {
+    db.run(query, (err) => {
+        if (err) {
+            log.error(`Error creating ${tableName} table: ${err.message}`);
+        } else {
+            log.debug(`${tableName} table is ready`);
+        }
+    });
+};
+
+genresDb.serialize(() => {
+    createTable(
+        genresDb,
+        `CREATE TABLE IF NOT EXISTS genres (
+            genre_id INTEGER,
+            genre_name TEXT,
+            media_type TEXT,
+            language TEXT,
+            PRIMARY KEY (genre_id, media_type, language),
+            UNIQUE (genre_id, media_type, language)
+        )`,
+        'genres'
+    );
 });
 
 cacheDb.serialize(() => {
-    cacheDb.run(`CREATE TABLE IF NOT EXISTS cache (
-        key TEXT PRIMARY KEY,
-        value TEXT,
-        timestamp INTEGER,
-        page INTEGER,
-        skip INTEGER
-    )`, (err) => {
-        if (err) {
-            log.error(`Error creating cache table: ${err.message}`);
-        } else {
-            log.debug('Cache table is ready');
-        }
-    });
+    createTable(
+        cacheDb,
+        `CREATE TABLE IF NOT EXISTS cache (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            timestamp INTEGER,
+            page INTEGER,
+            skip INTEGER,
+            genre TEXT,
+            year TEXT,
+            rating TEXT,
+            mediaType TEXT
+        )`,
+        'cache'
+    );
 });
 
 module.exports = {

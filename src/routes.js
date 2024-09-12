@@ -10,7 +10,6 @@ const router = express.Router();
 router.use(requestLogger);
 
 const isPublicInstance = process.env.PUBLIC_INSTANCE === 'true';
-
 const baseDir = isPublicInstance ? 'public' : 'private';
 
 router.get("/", (req, res) => {
@@ -24,21 +23,16 @@ router.get("/:configParameters?/configure", (req, res) => {
 });
 
 router.get("/:configParameters?/manifest.json", async (req, res) => {
+    const { configParameters } = req.params;
+    const config = configParameters ? JSON.parse(decodeURIComponent(configParameters)) : {};
+    const { language, tmdbApiKey } = config;
+
+    log.debug(`Manifest request for language: ${language}`);
+
     try {
-        const { configParameters } = req.params;
-        const config = configParameters ? JSON.parse(decodeURIComponent(configParameters)) : {};
-        const { language, tmdbApiKey } = config;
-
-        log.debug(`Manifest request for language: ${language}`);
-
-        if (language) {
-            const genresExist = await checkGenresExistForLanguage(language);
-            log.debug(`Genres for language ${language}: ${genresExist ? 'Exist' : 'Fetching'}`);
-
-            if (!genresExist) {
-                await fetchAndStoreGenres(language, tmdbApiKey);
-                log.debug(`Genres fetched for language: ${language}`);
-            }
+        if (language && !(await checkGenresExistForLanguage(language))) {
+            log.debug(`Fetching genres for language: ${language}`);
+            await fetchAndStoreGenres(language, tmdbApiKey);
         }
 
         const manifest = await generateManifest(language);
@@ -51,37 +45,37 @@ router.get("/:configParameters?/manifest.json", async (req, res) => {
 
 router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res) => {
     const { configParameters, type, id, extra } = req.params;
-    let extraParams = req.query;
-    const cacheDuration = req.query.cacheDuration || '3d';
-
+    const { cacheDuration = '3d', ...query } = req.query;
     const config = configParameters ? JSON.parse(decodeURIComponent(configParameters)) : {};
     const { language, hideNoPoster, tmdbApiKey } = config;
 
     log.info(`Catalog request: type=${type}, id=${id}, language=${language}`);
-    log.debug(`Extra parameters: ${JSON.stringify(extraParams)}`);
+    log.debug(`Extra parameters: ${JSON.stringify(query)}`);
 
-    let mediaType = type === 'series' ? 'tv' : type;
-
+    const mediaType = type === 'series' ? 'tv' : type;
     if (!['movie', 'tv'].includes(mediaType)) {
         log.error(`Invalid catalog type: ${mediaType}`);
         return res.status(400).json({ metas: [] });
     }
 
     try {
+        let extraParams = { ...query };
+
         if (extra) {
             const decodedExtra = decodeURIComponent(extra);
-            const extraParamsFromUrl = decodedExtra.split(/(?<!\s)&(?!\s)/).reduce((acc, param) => {
-                const [key, value] = param.split('=');
-                if (key && value) {
-                    acc[decodeURIComponent(key.trim())] = decodeURIComponent(value.trim());
-                }
-                return acc;
-            }, {});
-            extraParams = { ...extraParams, ...extraParamsFromUrl };
+            extraParams = {
+                ...extraParams,
+                ...Object.fromEntries(
+                    decodedExtra.split(/(?<!\s)&(?!\s)/).map(param => {
+                        const [key, value] = param.split('=').map(decodeURIComponent);
+                        return [key.trim(), value.trim()];
+                    })
+                )
+            };
         }
 
         if (language) extraParams.language = language;
-        if (typeof hideNoPoster !== 'undefined') extraParams.hideNoPoster = hideNoPoster.toString();
+        if (hideNoPoster !== undefined) extraParams.hideNoPoster = String(hideNoPoster);
 
         if (extraParams.genre) {
             const genreId = await getGenreId(mediaType, extraParams.genre);
@@ -92,12 +86,13 @@ router.get("/:configParameters?/catalog/:type/:id/:extra?.json", async (req, res
             }
         }
 
+        log.debug(`Extra parameters after processing: ${JSON.stringify(extraParams)}`);
         const metas = await fetchData(mediaType, id, extraParams, cacheDuration, tmdbApiKey);
         log.info(`Fetched ${metas.length} items from TMDB`);
 
-        const filteredMetas = extraParams.hideNoPoster === 'true' ? metas.filter(meta => meta.poster) : metas;
-
-        res.json({ metas: filteredMetas });
+        res.json({
+            metas: extraParams.hideNoPoster === 'true' ? metas.filter(meta => meta.poster) : metas
+        });
     } catch (error) {
         log.error(`Error fetching catalog data: ${error.message}`);
         res.status(500).json({ metas: [] });
