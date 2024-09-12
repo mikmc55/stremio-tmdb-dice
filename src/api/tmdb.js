@@ -46,7 +46,7 @@ const buildQueryParams = (params) => {
     return queryParams.join('&');
 };
 
-const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = process.env.TMDB_API_KEY, rpdbApiKey, fanartApiKey) => { // Utilisez les variables d'environnement par défaut
+const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = process.env.TMDB_API_KEY, rpdbApiKey, fanartApiKey) => {
     try {
         const mediaType = type === 'series' ? 'tv' : type;
         const language = extra.language || 'default';
@@ -56,53 +56,51 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = pro
         const skip = extra.skip || 0;
 
         const cacheKey = `catalog_${mediaType}_${id}_${JSON.stringify(extra)}_lang_${language}_genre_${genre}_year_${year}_rating_${rating}`;
-        console.log(`Cache key generated: ${cacheKey}`);
+        log.debug(`Cache key generated: ${cacheKey}`);
 
         const cachedData = await getCatalogCache(cacheKey, cacheDuration);
         if (cachedData) {
-            console.log(`Using cached data for key: ${cacheKey}`);
+            log.info(`Using cached data for key: ${cacheKey}`);
             return cachedData.value;
         }
 
-        console.log(`Skip value: ${skip}`);
+        log.debug(`Skip value: ${skip}`);
 
         const initialQueryParams = buildQueryParams({
             ...extra,
             page: 1
         });
         const initialUrl = `${TMDB_BASE_URL}/discover/${mediaType}?api_key=${tmdbApiKey}&${initialQueryParams}`;
-        console.log(`Fetching initial data from TMDB to get total_pages: ${initialUrl}`);
+        log.debug(`Fetching initial data from TMDB to get total_pages: ${initialUrl}`);
 
         const initialResponse = await axios.get(initialUrl);
         let total_pages = initialResponse.data.total_pages;
-        console.log(`Total pages available: ${total_pages}`);
+        log.info(`Total pages available: ${total_pages}`);
 
         if (total_pages > 500) {
             total_pages = 500;
-            console.log(`Capping total pages at 500`);
+            log.warn(`Capping total pages at 500 (TMDB limitation)`);
         }
 
         const fetchedPages = await getFetchedPages(genre, year, rating, mediaType, cacheDb);
-        console.log(`Fetched pages: ${fetchedPages}`);
+        log.debug(`Fetched pages: ${fetchedPages}`);
 
-        let availablePages = Array.from({
-            length: total_pages
-        }, (_, i) => i + 1).filter(page => !fetchedPages.includes(page));
+        let availablePages = Array.from({ length: total_pages }, (_, i) => i + 1).filter(page => !fetchedPages.includes(page));
 
         if (availablePages.length === 0) {
-            console.warn(`All pages have been fetched for the current filters.`);
+            log.warn(`All pages have been fetched for the current filters.`);
             return [];
         }
 
         const randomPage = availablePages[Math.floor(Math.random() * availablePages.length)];
-        console.log(`Random page selected: ${randomPage}`);
+        log.debug(`Random page selected: ${randomPage}`);
 
         const queryParams = buildQueryParams({
             ...extra,
             page: randomPage
         });
         const url = `${TMDB_BASE_URL}/discover/${mediaType}?api_key=${tmdbApiKey}&${queryParams}`;
-        console.log(`Fetching from TMDB: ${url}`);
+        log.debug(`Fetching from TMDB: ${url}`);
 
         return new Promise((resolve, reject) => {
             queue.push({
@@ -110,7 +108,7 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = pro
                     try {
                         const response = await axios.get(url);
                         const results = response.data.results;
-                        console.log(`Fetched ${results.length} results from TMDB on page ${randomPage}`);
+                        log.info(`Fetched ${results.length} results from TMDB on page ${randomPage}`);
 
                         const metas = await Promise.all(results.map(async item => {
                             const genreNames = item.genre_ids && item.genre_ids.length > 0 ?
@@ -118,7 +116,7 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = pro
                                 [];
                         
                             if (item.genre_ids && item.genre_ids.length === 0) {
-                                console.warn(`No genre IDs for item ${item.id}`);
+                                log.warn(`No genre IDs for item ${item.id}`);
                             }
                         
                             let logo = null;
@@ -131,7 +129,7 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = pro
                             }
                         
                             const posterUrl = await getPosterUrl(item, rpdbApiKey);
-                            console.log(`Poster URL for item ${item.id}: ${posterUrl}`);
+                            log.debug(`Poster URL for item ${item.id}: ${posterUrl}`);
                         
                             return {
                                 id: item.id.toString(),
@@ -146,20 +144,19 @@ const fetchData = async (type, id, extra, cacheDuration = '3d', tmdbApiKey = pro
                                 genres: genreNames
                             };
                         }));
-                        
 
                         setCatalogCache(cacheKey, metas, cacheDuration, randomPage, skip, genre, year, rating, mediaType);
                         await cachePosters();
                         resolve(metas);
                     } catch (error) {
-                        console.error(`TMDB fetch error: ${error.message}`);
+                        log.error(`TMDB fetch error: ${error.message}`);
                         reject(new Error('Failed to fetch data from TMDB'));
                     }
                 }
             });
         });
     } catch (error) {
-        console.error(`Error in fetchData: ${error.message}`);
+        log.error(`Error in fetchData: ${error.message}`);
         throw error;
     }
 };

@@ -76,19 +76,7 @@ const generateManifest = async (language) => {
             behaviorHints: {
                 configurable: true,
                 configurationRequired: false,
-            },
-            config: [
-                {
-                    key: 'tmdbApiKey',
-                    type: 'text',
-                    title: 'TMDB API Key (<a href="https://www.themoviedb.org/settings/api" target="_blank">Get it here</a>)',
-                },
-                {
-                    key: 'language',
-                    type: 'text',
-                    title: 'Language',
-                }
-            ]
+            }
         };
     } catch (error) {
         console.error('Error generating manifest:', error);
