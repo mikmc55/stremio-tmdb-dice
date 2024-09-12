@@ -60,8 +60,7 @@ cacheDb.serialize(() => {
             genre TEXT,
             year TEXT,
             rating TEXT,
-            mediaType TEXT,
-            sort_by TEXT
+            mediaType TEXT
         )`,
         'cache'
     );
