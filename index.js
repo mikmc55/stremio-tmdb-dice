@@ -5,12 +5,20 @@ const path = require('path');
 const log = require('./src/helpers/logger');
 const routes = require('./src/routes/index');
 
-const PORT = process.env.PORT || 7000;
 const app = express();
+const PORT = process.env.PORT; // Removed fallback to a hardcoded port
 
-app.use(cors());
+// CORS configuration to ensure correct origin in production
+const corsOptions = {
+    origin: process.env.BASE_URL || 'http://localhost:7000',
+    optionsSuccessStatus: 200
+};
 
+app.use(cors(corsOptions));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Health check endpoint
+app.get('/health', (req, res) => res.status(200).send('OK'));
 
 app.use('/', routes);
 
